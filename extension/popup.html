@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Me Learning Hub</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1 class="title">📚 Learning Hub</h1>
+      <button class="btn-settings" id="settings-btn" title="Settings">⚙️</button>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="content">
+      <!-- View: Extraction -->
+      <div class="view" id="view-extraction">
+        <div class="extraction-section">
+          <h2>Capture Content</h2>
+          <p class="subtitle">Extract and save web content to your learning projects</p>
+
+          <div class="button-group">
+            <button class="btn btn--primary btn--full" id="btn-capture-page">
+              <span>📄</span>
+              <span>Capture Full Page</span>
+            </button>
+            <button class="btn btn--secondary btn--full" id="btn-capture-selection">
+              <span>✂️</span>
+              <span>Capture Selection</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Projects -->
+        <div class="projects-section">
+          <h3>Your Projects</h3>
+          <div id="projects-list" class="projects-list">
+            <p class="empty-state">Loading projects...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- View: Preview -->
+      <div class="view" id="view-preview" style="display: none;">
+        <div class="preview-header">
+          <button class="btn-back" id="btn-back">← Back</button>
+          <h2>Preview Content</h2>
+        </div>
+
+        <div class="preview-form">
+          <div class="form-group">
+            <label for="preview-title">Title</label>
+            <input type="text" id="preview-title" class="form-control" placeholder="Document title">
+          </div>
+
+          <div class="form-group">
+            <label for="preview-url">Source URL</label>
+            <input type="text" id="preview-url" class="form-control" placeholder="Source URL" readonly>
+          </div>
+
+          <div class="form-group">
+            <label for="preview-project">Project</label>
+            <select id="preview-project" class="form-control">
+              <option value="">-- Select a project --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Content Preview</label>
+            <div id="preview-content" class="preview-content">
+              <p>No content</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="preview-tags">Tags (comma-separated)</label>
+            <input type="text" id="preview-tags" class="form-control" placeholder="e.g., python, tutorial, advanced">
+          </div>
+
+          <div class="button-group">
+            <button class="btn btn--secondary btn--full" id="btn-cancel-save">Cancel</button>
+            <button class="btn btn--primary btn--full" id="btn-save-document">Save to Project</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- View: Settings -->
+      <div class="view" id="view-settings" style="display: none;">
+        <div class="settings-header">
+          <button class="btn-back" id="btn-back-settings">← Back</button>
+          <h2>Settings</h2>
+        </div>
+
+        <div class="settings-form">
+          <div class="settings-section">
+            <h3>Extension Settings</h3>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="setting-auto-save" checked>
+                Auto-save captured content
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="setting-copy-clipboard" checked>
+                Copy captured markdown to clipboard
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="setting-context-menu" checked>
+                Show context menu options
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Content Extraction</h3>
+            <div class="form-group">
+              <label for="setting-default-project">Default Project</label>
+              <select id="setting-default-project" class="form-control">
+                <option value="">-- None --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="setting-include-images" checked>
+                Include images in captures
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="setting-include-links" checked>
+                Preserve links in markdown
+              </label>
+            </div>
+          </div>
+
+          <div class="button-group">
+            <button class="btn btn--secondary btn--full" id="btn-reset-settings">Reset to Defaults</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- View: Status Message -->
+      <div class="view" id="view-status" style="display: none;">
+        <div class="status-message">
+          <div class="status-icon" id="status-icon">✓</div>
+          <h2 id="status-title">Success</h2>
+          <p id="status-message">Content saved successfully!</p>
+          <button class="btn btn--primary btn--full" id="btn-status-close">Close</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>
+        <a href="https://github.com/StephenBooysen/me-learning-hub" target="_blank">GitHub</a> •
+        <a href="#" id="footer-docs">Documentation</a>
+      </p>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
