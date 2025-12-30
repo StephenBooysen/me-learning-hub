@@ -2,10 +2,18 @@ const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const FileManager = require('./app/js/file-manager');
+const AIClient = require('./app/js/ai-client');
+const StudyPlanGenerator = require('./app/js/study-plan');
+const FileWatcher = require('./app/js/file-watcher');
+const SpacedRepetition = require('./app/js/learning-modes/spaced-repetition');
 
 const store = new Store();
 let mainWindow;
 let fileManager;
+let aiClient;
+let studyPlanGenerator;
+let fileWatcher;
+let spacedRepetition;
 
 // Default app configuration
 const defaultConfig = {
@@ -143,9 +151,27 @@ function createMenu() {
 app.on('ready', () => {
   initConfig();
   const config = store.get('config', defaultConfig);
+
+  // Initialize core modules
   fileManager = new FileManager(config.dataDir);
+  aiClient = new AIClient({
+    provider: process.env.AI_PROVIDER || 'openai',
+    apiKey: process.env.AI_API_KEY,
+    model: process.env.AI_MODEL || 'gpt-4'
+  });
+  studyPlanGenerator = new StudyPlanGenerator(fileManager, aiClient);
+  spacedRepetition = new SpacedRepetition();
+
   createWindow();
   createMenu();
+
+  // Start file watcher
+  fileWatcher = new FileWatcher(
+    path.join(config.dataDir, 'projects'),
+    fileManager,
+    mainWindow
+  );
+  fileWatcher.start();
 });
 
 app.on('window-all-closed', () => {
@@ -276,6 +302,120 @@ ipcMain.handle('study-plan:delete', async (event, projectId, planId) => {
     return await fileManager.deleteStudyPlan(projectId, planId);
   } catch (error) {
     console.error('Error deleting study plan:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('study-plan:generate', async (event, projectId, documentId, options) => {
+  try {
+    if (!studyPlanGenerator) {
+      throw new Error('Study plan generator not initialized');
+    }
+    return await studyPlanGenerator.generatePlan(projectId, documentId, options);
+  } catch (error) {
+    console.error('Error generating study plan:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('study-plan:get-techniques', () => {
+  try {
+    return studyPlanGenerator.getAvailableTechniques();
+  } catch (error) {
+    console.error('Error getting techniques:', error);
+    throw error;
+  }
+});
+
+// IPC Handlers - Spaced Repetition
+ipcMain.handle('spaced-repetition:calculate', async (event, quality, repetitions, interval, easeFactor) => {
+  try {
+    return spacedRepetition.calculateNextReview(quality, repetitions, interval, easeFactor);
+  } catch (error) {
+    console.error('Error calculating spaced repetition:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('spaced-repetition:record-review', async (event, item, quality, timeSpent, confidence) => {
+  try {
+    return spacedRepetition.recordReview(item, quality, timeSpent, confidence);
+  } catch (error) {
+    console.error('Error recording review:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('spaced-repetition:get-due-items', async (event, items) => {
+  try {
+    return spacedRepetition.getItemsDueForReview(items);
+  } catch (error) {
+    console.error('Error getting due items:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('spaced-repetition:get-session-plan', async (event, items, durationMinutes) => {
+  try {
+    return spacedRepetition.getSessionPlan(items, durationMinutes);
+  } catch (error) {
+    console.error('Error getting session plan:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('spaced-repetition:calculate-stats', async (event, items) => {
+  try {
+    return spacedRepetition.calculateStudyStats(items);
+  } catch (error) {
+    console.error('Error calculating statistics:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('spaced-repetition:get-recommended-time', async (event, stats) => {
+  try {
+    return spacedRepetition.getRecommendedStudyTime(stats);
+  } catch (error) {
+    console.error('Error getting recommended time:', error);
+    throw error;
+  }
+});
+
+// IPC Handlers - AI Features
+ipcMain.handle('ai:test-connection', async (event) => {
+  try {
+    if (!aiClient) {
+      return { success: false, message: 'AI client not initialized' };
+    }
+    const result = await aiClient.testConnection();
+    return { success: result };
+  } catch (error) {
+    console.error('Error testing AI connection:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('ai:generate-summary', async (event, markdown, maxLength) => {
+  try {
+    if (!aiClient) {
+      throw new Error('AI client not initialized');
+    }
+    return await aiClient.generateSummary(markdown, maxLength);
+  } catch (error) {
+    console.error('Error generating summary:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('ai:generate-objectives', async (event, markdown) => {
+  try {
+    if (!aiClient) {
+      throw new Error('AI client not initialized');
+    }
+    return await aiClient.generateLearningObjectives(markdown);
+  } catch (error) {
+    console.error('Error generating objectives:', error);
     throw error;
   }
 });

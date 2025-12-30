@@ -22,6 +22,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('study-plan:save', projectId, planId, content, metadata),
   readStudyPlan: (projectId, planId) => ipcRenderer.invoke('study-plan:read', projectId, planId),
   deleteStudyPlan: (projectId, planId) => ipcRenderer.invoke('study-plan:delete', projectId, planId),
+  generateStudyPlan: (projectId, documentId, options) =>
+    ipcRenderer.invoke('study-plan:generate', projectId, documentId, options),
+  getStudyTechniques: () => ipcRenderer.invoke('study-plan:get-techniques'),
+
+  // Spaced Repetition
+  calculateSpacedRepetition: (quality, repetitions, interval, easeFactor) =>
+    ipcRenderer.invoke('spaced-repetition:calculate', quality, repetitions, interval, easeFactor),
+  recordReview: (item, quality, timeSpent, confidence) =>
+    ipcRenderer.invoke('spaced-repetition:record-review', item, quality, timeSpent, confidence),
+  getDueItems: (items) =>
+    ipcRenderer.invoke('spaced-repetition:get-due-items', items),
+  getSessionPlan: (items, durationMinutes) =>
+    ipcRenderer.invoke('spaced-repetition:get-session-plan', items, durationMinutes),
+  calculateStudyStats: (items) =>
+    ipcRenderer.invoke('spaced-repetition:calculate-stats', items),
+  getRecommendedStudyTime: (stats) =>
+    ipcRenderer.invoke('spaced-repetition:get-recommended-time', stats),
+
+  // AI Features
+  testAIConnection: () => ipcRenderer.invoke('ai:test-connection'),
+  generateSummary: (markdown, maxLength) =>
+    ipcRenderer.invoke('ai:generate-summary', markdown, maxLength),
+  generateObjectives: (markdown) =>
+    ipcRenderer.invoke('ai:generate-objectives', markdown),
 
   // Configuration
   getConfig: () => ipcRenderer.invoke('config:get'),
@@ -33,7 +57,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Event listeners
   onMenuNewProject: (callback) => ipcRenderer.on('menu:new-project', callback),
   onMenuOpenProject: (callback) => ipcRenderer.on('menu:open-project', callback),
-  removeMenuListener: (channel) => ipcRenderer.removeAllListeners(channel)
+  removeMenuListener: (channel) => ipcRenderer.removeAllListeners(channel),
+
+  // File watcher events
+  onDocumentAdded: (callback) => ipcRenderer.on('file:document-added', callback),
+  onDocumentDeleted: (callback) => ipcRenderer.on('file:document-deleted', callback),
+  onStudyPlanAdded: (callback) => ipcRenderer.on('file:study-plan-added', callback),
+  onStudyPlanDeleted: (callback) => ipcRenderer.on('file:study-plan-deleted', callback),
+  onSessionAdded: (callback) => ipcRenderer.on('file:session-added', callback),
+  onProjectAdded: (callback) => ipcRenderer.on('file:project-added', callback),
+  onProjectDeleted: (callback) => ipcRenderer.on('file:project-deleted', callback),
+  onFileChanged: (callback) => ipcRenderer.on('file:changed', callback)
 });
 
 // Utility functions exposed to renderer
