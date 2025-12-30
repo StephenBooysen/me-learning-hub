@@ -145,32 +145,81 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 /**
- * Send message to Electron app
- * Uses native messaging if available, falls back to file system
+ * Send message to Electron app via HTTP bridge
+ * Uses localhost:47823 HTTP bridge for document import and project management
  */
 async function sendElectronMessage(message) {
-  return new Promise((resolve, reject) => {
-    // Try native messaging first
-    chrome.runtime.sendNativeMessage(
-      'com.melearninghub.nativehost',
-      message,
-      (response) => {
-        if (chrome.runtime.lastError) {
-          console.warn('Native messaging failed, using fallback');
-          // Fallback: return mock response
-          // In production, this would use file system API or other mechanism
-          resolve({ success: true, fallback: true });
-        } else {
-          resolve(response);
-        }
-      }
-    );
+  const BRIDGE_URL = 'http://localhost:47823';
+  const TIMEOUT = 5000;
 
-    // Timeout after 5 seconds
-    setTimeout(() => {
-      reject(new Error('Electron communication timeout'));
-    }, 5000);
-  });
+  try {
+    // First check if Electron app is running
+    const healthCheck = await Promise.race([
+      fetch(`${BRIDGE_URL}/api/health`),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Health check timeout')), TIMEOUT)
+      )
+    ]);
+
+    if (!healthCheck.ok) {
+      throw new Error('Electron app health check failed');
+    }
+
+    // Map native messaging format to HTTP API format
+    let endpoint, payload;
+
+    if (message.action === 'document:save') {
+      endpoint = '/api/import-document';
+      payload = {
+        projectId: message.projectId,
+        docId: message.docId,
+        content: message.content,
+        metadata: message.metadata || {},
+        autoGeneratePlan: message.autoGeneratePlan || false
+      };
+    } else if (message.action === 'project:list') {
+      endpoint = '/api/projects';
+      payload = {};
+    } else {
+      throw new Error(`Unknown action: ${message.action}`);
+    }
+
+    // Send HTTP request to Electron bridge
+    const response = await Promise.race([
+      fetch(`${BRIDGE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout')), TIMEOUT)
+      )
+    ]);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.duplicate) {
+      // Handle duplicate document case
+      return {
+        success: false,
+        duplicate: true,
+        existingDoc: data.existingDoc,
+        message: 'Document already imported from this URL'
+      };
+    }
+
+    return { success: true, data: data.data || data };
+  } catch (error) {
+    console.error('Electron communication error:', error.message);
+    throw new Error(`Failed to communicate with Me Learning Hub app: ${error.message}`);
+  }
 }
 
 /**

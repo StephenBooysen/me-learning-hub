@@ -3,13 +3,16 @@
  * Converts HTML to Markdown format
  */
 
+(function(window) {
+  'use strict';
+
 /**
  * Convert HTML to Markdown
  * @param {string} html - HTML content
  * @param {object} options - Conversion options
  * @returns {string} Markdown content
  */
-export function htmlToMarkdown(html, options = {}) {
+function htmlToMarkdown(html, options = {}) {
   const {
     includeLinks = true,
     includeImages = true,
@@ -271,7 +274,7 @@ function cleanupWhitespace(markdown) {
 /**
  * Create markdown document with metadata
  */
-export function createMarkdownDocument(title, sourceUrl, content, tags = []) {
+function createMarkdownDocument(title, sourceUrl, content, tags = []) {
   const timestamp = new Date().toISOString();
   const tagString = tags.length > 0 ? tags.join(', ') : '';
 
@@ -295,7 +298,7 @@ export function createMarkdownDocument(title, sourceUrl, content, tags = []) {
 /**
  * Extract title from HTML
  */
-export function extractTitle(html) {
+function extractTitle(html) {
   // Try og:title meta tag
   let match = html.match(/<meta\s+property=["']og:title["'][^>]*content=["']([^"']*)["']/i);
   if (match) return match[1];
@@ -315,7 +318,7 @@ export function extractTitle(html) {
 /**
  * Extract description from HTML
  */
-export function extractDescription(html) {
+function extractDescription(html) {
   // Try og:description meta tag
   let match = html.match(/<meta\s+property=["']og:description["'][^>]*content=["']([^"']*)["']/i);
   if (match) return match[1];
@@ -328,4 +331,11 @@ export function extractDescription(html) {
   return '';
 }
 
-console.log('Markdown converter module loaded');
+  // Export to global scope
+  window.MarkdownConverter = {
+    htmlToMarkdown,
+    createMarkdownDocument,
+    extractTitle,
+    extractDescription
+  };
+})(window);

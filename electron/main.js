@@ -591,6 +591,106 @@ ipcMain.handle('dialog:select-directory', async () => {
   }
 });
 
+// HTTP Bridge for Chrome Extension Communication
+const express = require('express');
+const cors = require('cors');
+const extensionApp = express();
+const BRIDGE_PORT = 47823;
+
+extensionApp.use(cors({ origin: 'chrome-extension://*' }));
+extensionApp.use(express.json({ limit: '50mb' }));
+
+// Health check endpoint
+extensionApp.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', app: 'Me Learning Hub' });
+});
+
+// Import document from extension endpoint
+extensionApp.post('/api/import-document', async (req, res) => {
+  try {
+    const { projectId, docId, content, metadata, autoGeneratePlan } = req.body;
+
+    if (!projectId || !docId || !content) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: projectId, docId, content'
+      });
+    }
+
+    // Check for duplicates by URL
+    if (metadata?.sourceUrl) {
+      const docs = await fileManager.listDocuments(projectId);
+      const duplicate = docs.find(d => d.sourceUrl === metadata.sourceUrl);
+
+      if (duplicate) {
+        return res.json({
+          success: false,
+          duplicate: true,
+          existingDoc: {
+            id: duplicate.id,
+            title: duplicate.title,
+            sourceUrl: duplicate.sourceUrl
+          }
+        });
+      }
+    }
+
+    // Save document
+    const result = await fileManager.saveMarkdownFile(
+      projectId, docId, content, metadata
+    );
+
+    // Optional: Auto-generate study plan
+    if (autoGeneratePlan && studyPlanGenerator) {
+      try {
+        const plan = await studyPlanGenerator.generatePlan(
+          projectId, docId, {
+            documentContent: content,
+            documentTitle: metadata?.title || 'Untitled',
+            techniques: ['Spaced Repetition'],
+            intensity: 'medium',
+            sessionDuration: 25
+          }
+        );
+        result.studyPlan = {
+          id: plan.id,
+          title: plan.title,
+          itemCount: plan.itemCount
+        };
+      } catch (planError) {
+        console.warn('Study plan generation failed:', planError);
+        // Continue even if plan generation fails
+      }
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Import document error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to import document'
+    });
+  }
+});
+
+// Start HTTP bridge server
+extensionApp.listen(BRIDGE_PORT, 'localhost', () => {
+  console.log(`[Extension Bridge] HTTP server listening on http://localhost:${BRIDGE_PORT}`);
+  console.log(`[Extension Bridge] Ready to accept chrome extension connections`);
+});
+
+// Handle bridge server errors
+extensionApp.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.warn(`[Extension Bridge] Port ${BRIDGE_PORT} already in use, bridge may not work`);
+  } else {
+    console.error('[Extension Bridge] Server error:', error);
+  }
+});
+
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);

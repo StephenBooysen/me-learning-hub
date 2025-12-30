@@ -3,12 +3,15 @@
  * Intelligently extracts main content from web pages
  */
 
+(function(window) {
+  'use strict';
+
 /**
  * Extract main content from page
  * @param {object} options - Extraction options
  * @returns {object} Extracted content with title and body
  */
-export function extractPageContent(options = {}) {
+function extractPageContent(options = {}) {
   const {
     removeNavigation = true,
     removeFooter = true,
@@ -54,7 +57,7 @@ export function extractPageContent(options = {}) {
  * Extract selected text
  * @returns {object} Selected content
  */
-export function extractSelectedContent() {
+function extractSelectedContent() {
   const selection = window.getSelection();
 
   if (selection.rangeCount === 0) {
@@ -229,7 +232,7 @@ function extractPageTitle() {
 /**
  * Get page metadata
  */
-export function getPageMetadata() {
+function getPageMetadata() {
   return {
     title: extractPageTitle(),
     url: window.location.href,
@@ -316,7 +319,7 @@ function extractPublishDate() {
 /**
  * Get readability score of content
  */
-export function calculateReadability(text) {
+function calculateReadability(text) {
   if (!text) return 0;
 
   const words = text.split(/\s+/).length;
@@ -344,7 +347,7 @@ export function calculateReadability(text) {
 /**
  * Estimate reading time in minutes
  */
-export function estimateReadingTime(text) {
+function estimateReadingTime(text) {
   if (!text) return 0;
 
   const wordsPerMinute = 200;
@@ -353,4 +356,12 @@ export function estimateReadingTime(text) {
   return Math.ceil(words / wordsPerMinute);
 }
 
-console.log('Content extractor module loaded');
+  // Export to global scope
+  window.ContentExtractor = {
+    extractPageContent,
+    extractSelectedContent,
+    getPageMetadata,
+    calculateReadability,
+    estimateReadingTime
+  };
+})(window);

@@ -18,6 +18,13 @@ const btnCancelSave = document.getElementById('btn-cancel-save');
 const btnSaveDocument = document.getElementById('btn-save-document');
 const btnStatusClose = document.getElementById('btn-status-close');
 const btnResetSettings = document.getElementById('btn-reset-settings');
+const btnCancelImport = document.getElementById('btn-cancel-import');
+const btnImportAnyway = document.getElementById('btn-import-anyway');
+
+// Loading and Status Elements
+const loadingOverlay = document.getElementById('loading-overlay');
+const duplicateWarning = document.getElementById('duplicate-warning');
+const duplicateMessage = document.getElementById('duplicate-message');
 
 // Form Elements
 const previewTitle = document.getElementById('preview-title');
@@ -25,7 +32,13 @@ const previewUrl = document.getElementById('preview-url');
 const previewProject = document.getElementById('preview-project');
 const previewContent = document.getElementById('preview-content');
 const previewTags = document.getElementById('preview-tags');
+const previewAutoGeneratePlan = document.getElementById('preview-auto-generate-plan');
 const projectsList = document.getElementById('projects-list');
+
+// Metadata Elements
+const previewWordCount = document.getElementById('preview-word-count');
+const previewReadingTime = document.getElementById('preview-reading-time');
+const previewDomain = document.getElementById('preview-domain');
 
 // Settings Elements
 const settingDefaultProject = document.getElementById('setting-default-project');
@@ -81,6 +94,77 @@ function initializeEventListeners() {
       captureCurrentPage();
     }
   });
+
+  // Duplicate handling
+  btnCancelImport.addEventListener('click', () => {
+    hideDuplicateWarning();
+    switchView('extraction');
+  });
+
+  btnImportAnyway.addEventListener('click', () => {
+    hideDuplicateWarning();
+    saveDocument(true);
+  });
+}
+
+/**
+ * Show loading overlay
+ */
+function showLoadingOverlay() {
+  loadingOverlay.style.display = 'flex';
+}
+
+/**
+ * Hide loading overlay
+ */
+function hideLoadingOverlay() {
+  loadingOverlay.style.display = 'none';
+}
+
+/**
+ * Show duplicate warning
+ */
+function showDuplicateWarning(existingDoc) {
+  duplicateMessage.textContent = existingDoc.title
+    ? `This document has already been imported: "${existingDoc.title}"`
+    : 'This document has already been imported from this URL';
+  duplicateWarning.style.display = 'block';
+}
+
+/**
+ * Hide duplicate warning
+ */
+function hideDuplicateWarning() {
+  duplicateWarning.style.display = 'none';
+}
+
+/**
+ * Calculate metadata for content
+ */
+function calculateMetadata(markdown) {
+  // Word count
+  const wordCount = markdown.split(/\s+/).filter(w => w.length > 0).length;
+
+  // Reading time (approx 200 words per minute)
+  const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+
+  return { wordCount, readingTime };
+}
+
+/**
+ * Render markdown content in preview
+ */
+function renderMarkdownPreview(markdown) {
+  // Simple markdown rendering - preserve formatting
+  let rendered = markdown
+    .replace(/^### (.*?)$/gm, '<strong>$1</strong>')
+    .replace(/^## (.*?)$/gm, '<h3>$1</h3>')
+    .replace(/^# (.*?)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .substring(0, 400);
+
+  previewContent.innerHTML = rendered;
 }
 
 /**
@@ -214,10 +298,28 @@ async function captureCurrentPage() {
 function showPreview() {
   if (!currentExtraction) return;
 
+  hideDuplicateWarning();
+
   previewTitle.value = currentExtraction.title;
   previewUrl.value = currentExtraction.sourceUrl;
-  previewContent.textContent = currentExtraction.markdown.substring(0, 500);
   previewTags.value = '';
+  previewAutoGeneratePlan.checked = true;
+
+  // Render markdown preview
+  renderMarkdownPreview(currentExtraction.markdown);
+
+  // Calculate and display metadata
+  const { wordCount, readingTime } = calculateMetadata(currentExtraction.markdown);
+  previewWordCount.textContent = wordCount.toLocaleString();
+  previewReadingTime.textContent = `${readingTime} min`;
+
+  // Extract and display domain
+  try {
+    const url = new URL(currentExtraction.sourceUrl);
+    previewDomain.textContent = url.hostname;
+  } catch (e) {
+    previewDomain.textContent = '—';
+  }
 
   // Populate project select
   previewProject.innerHTML = '<option value="">-- Select a project --</option>';
@@ -229,7 +331,7 @@ function showPreview() {
   });
 
   // Set default project if exists
-  const settings = chrome.storage.local.get('settings', (result) => {
+  chrome.storage.local.get('settings', (result) => {
     if (result.settings?.defaultProject) {
       previewProject.value = result.settings.defaultProject;
     }
@@ -238,8 +340,9 @@ function showPreview() {
 
 /**
  * Save document to Electron app
+ * @param {boolean} importAnyway - Force import even if duplicate detected
  */
-async function saveDocument() {
+async function saveDocument(importAnyway = false) {
   if (!currentExtraction) {
     showStatus('error', 'Error', 'No content to save.');
     return;
@@ -261,6 +364,7 @@ async function saveDocument() {
 
   try {
     btnSaveDocument.disabled = true;
+    showLoadingOverlay();
 
     const docId = generateUUID();
     const metadata = {
@@ -276,11 +380,14 @@ async function saveDocument() {
       projectId: projectId,
       docId: docId,
       content: currentExtraction.markdown,
-      metadata: metadata
+      metadata: metadata,
+      autoGeneratePlan: previewAutoGeneratePlan.checked
     }, (response) => {
+      hideLoadingOverlay();
+
       if (response?.success) {
         // Copy to clipboard if enabled
-        const settings = chrome.storage.local.get('settings', (result) => {
+        chrome.storage.local.get('settings', (result) => {
           if (result.settings?.copyClipboard) {
             navigator.clipboard.writeText(currentExtraction.markdown);
           }
@@ -289,14 +396,19 @@ async function saveDocument() {
         showStatus('success', 'Success!', `Document saved to "${title}"`);
         currentExtraction = null;
         setTimeout(() => switchView('extraction'), 2000);
+      } else if (response?.duplicate && !importAnyway) {
+        // Show duplicate warning
+        showDuplicateWarning(response.existingDoc || {});
       } else {
         showStatus('error', 'Error', response?.error || 'Failed to save document.');
       }
+
+      btnSaveDocument.disabled = false;
     });
   } catch (error) {
     console.error('Error saving document:', error);
+    hideLoadingOverlay();
     showStatus('error', 'Error', error.message);
-  } finally {
     btnSaveDocument.disabled = false;
   }
 }

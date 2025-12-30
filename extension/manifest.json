@@ -35,7 +35,11 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": [
+        "utils/content-extractor.js",
+        "utils/markdown-converter.js",
+        "content.js"
+      ],
       "css": ["styles/content-highlighter.css"],
       "run_at": "document_start",
       "all_frames": true
