@@ -157,6 +157,8 @@ function switchView(viewName) {
     loadDashboard();
   } else if (viewName === 'projects') {
     loadProjectsList();
+  } else if (viewName === 'progress') {
+    loadProgressView();
   }
 }
 
@@ -975,6 +977,247 @@ function createStudyPlanCard(plan) {
   });
 
   return card;
+}
+
+/**
+ * Load progress view with analytics
+ */
+async function loadProgressView() {
+  if (!currentProject) {
+    document.getElementById('progress-content').innerHTML =
+      '<p class="empty-state">Select a project to view progress.</p>';
+    return;
+  }
+
+  try {
+    // Fetch analytics data
+    const metrics = await window.electronAPI.getAnalyticsMetrics(currentProject.id);
+    const sessions = await window.electronAPI.getSessionHistory(currentProject.id, { limit: 20 });
+    const recommendations = await window.electronAPI.getStudyRecommendations(currentProject.id, metrics);
+
+    // Update dashboard metrics
+    updateProgressDashboardMetrics(metrics);
+    updateMasteryProgress(metrics);
+    updateForecast(metrics);
+    updateTechniqueBreakdown(sessions);
+    displayRecommendations(recommendations);
+    displaySessionHistory(sessions);
+    setupSessionFilters(sessions);
+  } catch (error) {
+    console.error('Error loading progress view:', error);
+    showErrorMessage('Failed to load analytics data');
+  }
+}
+
+/**
+ * Update dashboard metrics display
+ */
+function updateProgressDashboardMetrics(metrics) {
+  document.getElementById('analytics-mastered').textContent = metrics.itemsMastered || 0;
+  document.getElementById('analytics-streak').textContent = metrics.currentStreak || 0;
+  document.getElementById('analytics-due-today').textContent = metrics.itemsDueToday || 0;
+  document.getElementById('analytics-time-week').textContent = `${metrics.studyTimeThisWeek || 0}m`;
+  document.getElementById('analytics-avg-quality').textContent = (metrics.averageQuality || 0).toFixed(1);
+  document.getElementById('analytics-completion').textContent = `${metrics.completionProgress || 0}%`;
+}
+
+/**
+ * Update mastery progress bar
+ */
+function updateMasteryProgress(metrics) {
+  const percentage = metrics.completionProgress || 0;
+  document.getElementById('mastery-fill').style.width = `${percentage}%`;
+  document.getElementById('mastery-fraction').textContent =
+    `${metrics.itemsMastered || 0} / ${metrics.totalItems || 0}`;
+}
+
+/**
+ * Update forecast bars
+ */
+function updateForecast(metrics) {
+  const today = metrics.itemsDueToday || 0;
+  const tomorrow = metrics.itemsDueTomorrow || 0;
+  const week = metrics.itemsDueWeek || 0;
+  const max = Math.max(today, tomorrow, week, 1);
+
+  document.getElementById('forecast-today').style.width = `${(today / max) * 100}%`;
+  document.getElementById('forecast-today-count').textContent = today;
+
+  document.getElementById('forecast-tomorrow').style.width = `${(tomorrow / max) * 100}%`;
+  document.getElementById('forecast-tomorrow-count').textContent = tomorrow;
+
+  document.getElementById('forecast-week').style.width = `${(week / max) * 100}%`;
+  document.getElementById('forecast-week-count').textContent = week;
+}
+
+/**
+ * Update technique breakdown
+ */
+function updateTechniqueBreakdown(sessions) {
+  const container = document.getElementById('technique-breakdown');
+
+  if (sessions.length === 0) {
+    container.innerHTML = '<p class="empty-state">No sessions yet.</p>';
+    return;
+  }
+
+  // Count technique usage
+  const techniqueUsage = {};
+  sessions.forEach(session => {
+    const technique = session.technique || 'Unknown';
+    techniqueUsage[technique] = (techniqueUsage[technique] || 0) + 1;
+  });
+
+  const techniques = Object.entries(techniqueUsage)
+    .sort((a, b) => b[1] - a[1]);
+
+  container.innerHTML = '';
+  techniques.forEach(([technique, count]) => {
+    const percentage = Math.round((count / sessions.length) * 100);
+    const techniqueCssClass = technique.toLowerCase().replace(/\s+/g, '-');
+
+    const item = document.createElement('div');
+    item.className = 'technique-item';
+    item.innerHTML = `
+      <div class="technique-name">${escapeHtml(technique)}</div>
+      <div class="technique-bar-container">
+        <div class="technique-bar technique-bar--${techniqueCssClass}" style="width: ${percentage}%"></div>
+      </div>
+      <div class="technique-percentage">${percentage}%</div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+/**
+ * Display recommendations
+ */
+function displayRecommendations(recommendations) {
+  const container = document.getElementById('recommendations-container');
+
+  if (!recommendations || recommendations.length === 0) {
+    container.innerHTML = '<p class="empty-state">Complete some study sessions to get personalized recommendations.</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+  recommendations.forEach(rec => {
+    const card = document.createElement('div');
+    card.className = `recommendation-card recommendation-${rec.priority}`;
+    card.innerHTML = `
+      <div class="recommendation-icon">${rec.icon}</div>
+      <div class="recommendation-content">
+        <div class="recommendation-title">${escapeHtml(rec.title)}</div>
+        <div class="recommendation-message">${escapeHtml(rec.message)}</div>
+        <div class="recommendation-action">${escapeHtml(rec.actionText)}</div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+/**
+ * Display session history
+ */
+function displaySessionHistory(sessions) {
+  const container = document.getElementById('session-history-list');
+
+  if (!sessions || sessions.length === 0) {
+    container.innerHTML = '<p class="empty-state">No sessions yet. Start a study session to begin tracking!</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+  sessions.forEach(session => {
+    const qualityClass = session.quality >= 4 ? 'high' : session.quality >= 3 ? 'medium' : 'low';
+    const trendIcon = session.trend === 'improving' ? '📈' : session.trend === 'declining' ? '📉' : '➡️';
+    const techniqueCssClass = (session.technique || 'Unknown').toLowerCase().replace(/\s+/g, '-');
+
+    const card = document.createElement('div');
+    card.className = 'session-history-card';
+    card.innerHTML = `
+      <div class="session-date">${formatSessionDate(session.date)}</div>
+      <div class="session-technique">
+        <span class="session-technique-badge badge--${techniqueCssClass}">
+          ${escapeHtml(session.technique || 'Unknown')}
+        </span>
+      </div>
+      <div class="session-items">${session.itemsReviewed} items</div>
+      <div class="session-quality quality-${qualityClass}">
+        ${(session.quality || 0).toFixed(1)}/5
+      </div>
+      <div class="session-time">${session.timeSpent}m</div>
+      <div class="session-trend trend-${session.trend || 'stable'}">
+        ${trendIcon}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+/**
+ * Setup session history filtering and sorting
+ */
+function setupSessionFilters(allSessions) {
+  const techniqueSelect = document.getElementById('session-filter-technique');
+  const sortSelect = document.getElementById('session-sort');
+
+  techniqueSelect.addEventListener('change', () => filterAndDisplaySessions(allSessions));
+  sortSelect.addEventListener('change', () => filterAndDisplaySessions(allSessions));
+}
+
+/**
+ * Filter and display sessions based on selected filters
+ */
+function filterAndDisplaySessions(allSessions) {
+  const techniqueSelect = document.getElementById('session-filter-technique');
+  const sortSelect = document.getElementById('session-sort');
+
+  const technique = techniqueSelect.value;
+  const sort = sortSelect.value;
+
+  let filtered = [...allSessions];
+
+  // Apply technique filter
+  if (technique) {
+    filtered = filtered.filter(s => s.technique === technique);
+  }
+
+  // Apply sorting
+  switch (sort) {
+    case 'date-asc':
+      filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+      break;
+    case 'quality-desc':
+      filtered.sort((a, b) => b.quality - a.quality);
+      break;
+    case 'quality-asc':
+      filtered.sort((a, b) => a.quality - b.quality);
+      break;
+    case 'date-desc':
+    default:
+      filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }
+
+  // Limit to 20 sessions
+  displaySessionHistory(filtered.slice(0, 20));
+}
+
+/**
+ * Format session date for display
+ */
+function formatSessionDate(dateString) {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return dateString;
+  }
 }
 
 // Hook into existing view switching

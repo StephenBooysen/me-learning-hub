@@ -7,6 +7,7 @@ const StudyPlanGenerator = require('./app/js/study-plan');
 const FileWatcher = require('./app/js/file-watcher');
 const SpacedRepetition = require('./app/js/learning-modes/spaced-repetition');
 const SessionManager = require('./app/js/session-manager');
+const AnalyticsEngine = require('./app/js/analytics-engine');
 
 const store = new Store();
 let mainWindow;
@@ -16,6 +17,7 @@ let studyPlanGenerator;
 let fileWatcher;
 let spacedRepetition;
 let sessionManager;
+let analyticsEngine;
 
 // Default app configuration
 const defaultConfig = {
@@ -164,6 +166,7 @@ app.on('ready', () => {
   studyPlanGenerator = new StudyPlanGenerator(fileManager, aiClient);
   spacedRepetition = new SpacedRepetition();
   sessionManager = new SessionManager(fileManager, spacedRepetition, aiClient);
+  analyticsEngine = new AnalyticsEngine(fileManager, spacedRepetition);
 
   createWindow();
   createMenu();
@@ -517,6 +520,43 @@ ipcMain.handle('ai:evaluate-explanation', async (event, originalContent, userExp
     return await aiClient.evaluateExplanation(originalContent, userExplanation);
   } catch (error) {
     console.error('Error evaluating explanation:', error);
+    throw error;
+  }
+});
+
+// IPC Handlers - Analytics & Dashboard
+ipcMain.handle('analytics:get-metrics', async (event, projectId) => {
+  try {
+    if (!analyticsEngine) {
+      throw new Error('Analytics engine not initialized');
+    }
+    return await analyticsEngine.calculateDashboardMetrics(projectId);
+  } catch (error) {
+    console.error('Error getting analytics metrics:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('analytics:get-session-history', async (event, projectId, options) => {
+  try {
+    if (!analyticsEngine) {
+      throw new Error('Analytics engine not initialized');
+    }
+    return await analyticsEngine.aggregateSessionHistory(projectId, options);
+  } catch (error) {
+    console.error('Error getting session history:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('analytics:get-recommendations', async (event, projectId, stats) => {
+  try {
+    if (!analyticsEngine) {
+      throw new Error('Analytics engine not initialized');
+    }
+    return await analyticsEngine.generateRecommendations(projectId, stats);
+  } catch (error) {
+    console.error('Error generating recommendations:', error);
     throw error;
   }
 });

@@ -69,6 +69,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   evaluateExplanation: (originalContent, userExplanation) =>
     ipcRenderer.invoke('ai:evaluate-explanation', originalContent, userExplanation),
 
+  // Analytics & Progress
+  getAnalyticsMetrics: (projectId) =>
+    ipcRenderer.invoke('analytics:get-metrics', projectId),
+  getSessionHistory: (projectId, options) =>
+    ipcRenderer.invoke('analytics:get-session-history', projectId, options),
+  getStudyRecommendations: (projectId, stats) =>
+    ipcRenderer.invoke('analytics:get-recommendations', projectId, stats),
+
   // Configuration
   getConfig: () => ipcRenderer.invoke('config:get'),
   setConfig: (key, value) => ipcRenderer.invoke('config:set', key, value),

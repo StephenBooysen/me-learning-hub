@@ -123,11 +123,133 @@
 
         <!-- Progress View -->
         <div class="view" id="view-progress" style="display: none;">
-          <div class="view-header">
-            <h3>Learning Progress</h3>
-          </div>
           <div id="progress-content" class="progress-content">
-            <p class="empty-state">Start studying to see your progress.</p>
+            <!-- Dashboard Metrics Grid -->
+            <div class="dashboard-grid analytics-grid" id="dashboard-metrics">
+              <div class="stat-card analytics-card">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-value" id="analytics-mastered">0</div>
+                <div class="stat-label">Items Mastered</div>
+                <div class="stat-sublabel">Repetitions ≥ 20</div>
+              </div>
+
+              <div class="stat-card analytics-card">
+                <div class="stat-icon">🔥</div>
+                <div class="stat-value" id="analytics-streak">0</div>
+                <div class="stat-label">Day Streak</div>
+                <div class="stat-sublabel">Keep going!</div>
+              </div>
+
+              <div class="stat-card analytics-card analytics-card--highlight">
+                <div class="stat-icon">📅</div>
+                <div class="stat-value" id="analytics-due-today">0</div>
+                <div class="stat-label">Due Today</div>
+                <div class="stat-sublabel">Ready to review</div>
+              </div>
+
+              <div class="stat-card analytics-card">
+                <div class="stat-icon">⏱️</div>
+                <div class="stat-value" id="analytics-time-week">0m</div>
+                <div class="stat-label">Study Time</div>
+                <div class="stat-sublabel">This week</div>
+              </div>
+
+              <div class="stat-card analytics-card">
+                <div class="stat-icon">⭐</div>
+                <div class="stat-value" id="analytics-avg-quality">0</div>
+                <div class="stat-label">Avg Quality</div>
+                <div class="stat-sublabel">Last 10 sessions</div>
+              </div>
+
+              <div class="stat-card analytics-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-value" id="analytics-completion">0%</div>
+                <div class="stat-label">Completion</div>
+                <div class="stat-sublabel">Overall progress</div>
+              </div>
+            </div>
+
+            <!-- Learning Progress Section -->
+            <div class="dashboard-section">
+              <h4>Learning Progress</h4>
+              <div class="progress-item">
+                <div class="progress-item-header">
+                  <span class="progress-item-label">Items Mastered</span>
+                  <span class="progress-item-value" id="mastery-fraction">0 / 0</span>
+                </div>
+                <div class="progress-bar-large">
+                  <div class="progress-fill-large" id="mastery-fill" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Review Forecast Section -->
+            <div class="dashboard-section">
+              <h4>Review Forecast</h4>
+              <div class="forecast-grid">
+                <div class="forecast-item">
+                  <div class="forecast-label">Today</div>
+                  <div class="forecast-bar-container">
+                    <div class="forecast-bar forecast-today" id="forecast-today" style="width: 0%"></div>
+                  </div>
+                  <div class="forecast-count" id="forecast-today-count">0</div>
+                </div>
+                <div class="forecast-item">
+                  <div class="forecast-label">Tomorrow</div>
+                  <div class="forecast-bar-container">
+                    <div class="forecast-bar forecast-tomorrow" id="forecast-tomorrow" style="width: 0%"></div>
+                  </div>
+                  <div class="forecast-count" id="forecast-tomorrow-count">0</div>
+                </div>
+                <div class="forecast-item">
+                  <div class="forecast-label">This Week</div>
+                  <div class="forecast-bar-container">
+                    <div class="forecast-bar forecast-week" id="forecast-week" style="width: 0%"></div>
+                  </div>
+                  <div class="forecast-count" id="forecast-week-count">0</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Technique Breakdown Section -->
+            <div class="dashboard-section">
+              <h4>Technique Usage</h4>
+              <div class="technique-breakdown" id="technique-breakdown">
+                <p class="empty-state">No sessions yet.</p>
+              </div>
+            </div>
+
+            <!-- Study Recommendations Section -->
+            <div class="dashboard-section">
+              <h4>Study Recommendations</h4>
+              <div class="recommendations-container" id="recommendations-container">
+                <p class="empty-state">Complete some study sessions to get personalized recommendations.</p>
+              </div>
+            </div>
+
+            <!-- Session History Section -->
+            <div class="dashboard-section">
+              <div class="section-header">
+                <h4>Session History</h4>
+                <div class="session-filters">
+                  <select id="session-filter-technique">
+                    <option value="">All Techniques</option>
+                    <option value="Spaced Repetition">Spaced Repetition</option>
+                    <option value="Active Recall">Active Recall</option>
+                    <option value="Interleaving">Interleaving</option>
+                    <option value="Feynman Technique">Feynman Technique</option>
+                  </select>
+                  <select id="session-sort">
+                    <option value="date-desc">Recent First</option>
+                    <option value="date-asc">Oldest First</option>
+                    <option value="quality-desc">Best Quality</option>
+                  </select>
+                </div>
+              </div>
+              <div class="session-history-list" id="session-history-list">
+                <p class="empty-state">No sessions yet. Start a study session to begin tracking!</p>
+              </div>
+            </div>
           </div>
         </div>
 

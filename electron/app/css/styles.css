@@ -1000,3 +1000,600 @@ textarea {
     min-width: 80px;
   }
 }
+
+/* ======================= ANALYTICS & DASHBOARD STYLES ======================= */
+
+/* Analytics Dashboard Grid */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.analytics-card {
+  text-align: center;
+  padding: 24px 16px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.analytics-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
+}
+
+.analytics-card--highlight {
+  border: 2px solid var(--primary-color);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.stat-sublabel {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-weight: 400;
+}
+
+/* Progress Bar - Large */
+.progress-item {
+  margin-bottom: 24px;
+}
+
+.progress-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.progress-item-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.progress-item-value {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.progress-bar-large {
+  height: 12px;
+  background-color: var(--light-gray);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progress-fill-large {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), #60a5fa);
+  border-radius: 6px;
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+/* Shimmer effect for progress bar */
+.progress-fill-large::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Forecast Grid */
+.forecast-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.forecast-item {
+  display: grid;
+  grid-template-columns: 80px 1fr 60px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background-color: var(--bg-primary);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.forecast-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.forecast-bar-container {
+  height: 8px;
+  background-color: var(--light-gray);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.forecast-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.forecast-today {
+  background-color: var(--danger-color);
+}
+
+.forecast-tomorrow {
+  background-color: var(--warning-color);
+}
+
+.forecast-week {
+  background-color: var(--primary-color);
+}
+
+.forecast-count {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+/* Technique Breakdown */
+.technique-breakdown {
+  display: grid;
+  gap: 12px;
+}
+
+.technique-item {
+  display: grid;
+  grid-template-columns: 150px 1fr 60px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background-color: var(--bg-primary);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.technique-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.technique-bar-container {
+  height: 8px;
+  background-color: var(--light-gray);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.technique-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.technique-bar--spaced-repetition {
+  background: linear-gradient(90deg, var(--primary-color), #60a5fa);
+}
+
+.technique-bar--active-recall {
+  background: linear-gradient(90deg, var(--success-color), #34d399);
+}
+
+.technique-bar--interleaving {
+  background: linear-gradient(90deg, var(--warning-color), #fbbf24);
+}
+
+.technique-bar--feynman-technique {
+  background: linear-gradient(90deg, var(--secondary-color), #a78bfa);
+}
+
+.technique-percentage {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+/* Recommendations Container */
+.recommendations-container {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendation-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  border-left: 4px solid var(--primary-color);
+  transition: var(--transition);
+}
+
+.recommendation-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.recommendation-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.recommendation-content {
+  flex: 1;
+}
+
+.recommendation-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.recommendation-message {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.recommendation-action {
+  font-size: 0.85rem;
+  color: var(--primary-color);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.recommendation-action:hover {
+  color: var(--primary-color-dark);
+}
+
+/* Recommendation priority styling */
+.recommendation-urgent {
+  border-left-color: var(--danger-color);
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+.recommendation-high {
+  border-left-color: var(--warning-color);
+  background-color: rgba(249, 115, 22, 0.05);
+}
+
+.recommendation-medium {
+  border-left-color: var(--primary-color);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.recommendation-suggestion {
+  border-left-color: var(--primary-color);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.recommendation-achievement {
+  border-left-color: var(--success-color);
+  background-color: rgba(16, 185, 129, 0.05);
+}
+
+/* Session History */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.session-filters {
+  display: flex;
+  gap: 12px;
+}
+
+.session-filters select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.session-filters select:hover {
+  border-color: var(--primary-color);
+}
+
+.session-filters select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.session-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.session-history-card {
+  display: grid;
+  grid-template-columns: 120px 150px 80px 80px 60px 40px;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: var(--transition);
+}
+
+.session-history-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
+}
+
+.session-date {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.session-technique {
+  display: flex;
+  align-items: center;
+}
+
+.session-technique-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge--spaced-repetition {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--primary-color);
+}
+
+.badge--active-recall {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+}
+
+.badge--interleaving {
+  background-color: rgba(249, 115, 22, 0.1);
+  color: var(--warning-color);
+}
+
+.badge--feynman-technique {
+  background-color: rgba(167, 139, 250, 0.1);
+  color: var(--secondary-color);
+}
+
+.session-items {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.session-quality {
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.quality-high {
+  color: var(--success-color);
+}
+
+.quality-medium {
+  color: var(--warning-color);
+}
+
+.quality-low {
+  color: var(--danger-color);
+}
+
+.session-time {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.session-trend {
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.trend-improving {
+  color: var(--success-color);
+}
+
+.trend-stable {
+  color: var(--text-secondary);
+}
+
+.trend-declining {
+  color: var(--danger-color);
+}
+
+/* Progress Content */
+.progress-content {
+  padding-bottom: 40px;
+}
+
+.dashboard-section {
+  margin-bottom: 32px;
+}
+
+.dashboard-section h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Empty state for no data */
+.progress-content .empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .analytics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .analytics-card {
+    padding: 20px 12px;
+  }
+
+  .stat-icon {
+    font-size: 2rem;
+  }
+
+  .stat-value {
+    font-size: 1.8rem;
+  }
+
+  .forecast-item {
+    grid-template-columns: 70px 1fr 50px;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .session-history-card {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .session-history-card > * {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .session-filters {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .session-filters select {
+    width: 100%;
+  }
+
+  .recommendation-card {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .technique-item {
+    grid-template-columns: 120px 1fr 50px;
+    gap: 8px;
+  }
+
+  .dashboard-section {
+    margin-bottom: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .analytics-card {
+    padding: 16px 12px;
+  }
+
+  .stat-icon {
+    font-size: 1.8rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
+
+  .stat-label {
+    font-size: 0.85rem;
+  }
+
+  .stat-sublabel {
+    font-size: 0.7rem;
+  }
+
+  .forecast-item {
+    grid-template-columns: 60px 1fr 45px;
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .session-history-card {
+    gap: 6px;
+    padding: 8px;
+    font-size: 0.85rem;
+  }
+
+  .session-date {
+    font-size: 0.8rem;
+  }
+
+  .session-technique-badge {
+    padding: 3px 8px;
+    font-size: 0.7rem;
+  }
+
+  .section-header h4 {
+    font-size: 1rem;
+  }
+
+  .recommendation-card {
+    padding: 12px;
+  }
+
+  .recommendation-icon {
+    font-size: 1.3rem;
+  }
+
+  .recommendation-title {
+    font-size: 0.95rem;
+  }
+
+  .recommendation-message {
+    font-size: 0.85rem;
+  }
+}
