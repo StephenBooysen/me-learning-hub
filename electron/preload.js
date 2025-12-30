@@ -47,6 +47,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateObjectives: (markdown) =>
     ipcRenderer.invoke('ai:generate-objectives', markdown),
 
+  // Session Management
+  startSession: (projectId, planId, options) =>
+    ipcRenderer.invoke('session:start', projectId, planId, options),
+  getCurrentSession: (sessionId) =>
+    ipcRenderer.invoke('session:get-current', sessionId),
+  nextItem: (sessionId) =>
+    ipcRenderer.invoke('session:next-item', sessionId),
+  previousItem: (sessionId) =>
+    ipcRenderer.invoke('session:previous-item', sessionId),
+  recordResponse: (sessionId, itemId, response) =>
+    ipcRenderer.invoke('session:record-response', sessionId, itemId, response),
+  pauseSession: (sessionId) =>
+    ipcRenderer.invoke('session:pause', sessionId),
+  resumeSession: (sessionId) =>
+    ipcRenderer.invoke('session:resume', sessionId),
+  completeSession: (sessionId) =>
+    ipcRenderer.invoke('session:complete', sessionId),
+  getSessionStats: (sessionId) =>
+    ipcRenderer.invoke('session:get-stats', sessionId),
+  evaluateExplanation: (originalContent, userExplanation) =>
+    ipcRenderer.invoke('ai:evaluate-explanation', originalContent, userExplanation),
+
   // Configuration
   getConfig: () => ipcRenderer.invoke('config:get'),
   setConfig: (key, value) => ipcRenderer.invoke('config:set', key, value),

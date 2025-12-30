@@ -130,6 +130,141 @@
             <p class="empty-state">Start studying to see your progress.</p>
           </div>
         </div>
+
+        <!-- Study Session View -->
+        <div class="view" id="view-session" style="display: none;">
+          <div class="session-container">
+            <!-- Session Header -->
+            <div class="session-header">
+              <div class="session-header-left">
+                <button class="btn btn--secondary" id="session-close-btn">
+                  <span>←</span> Back to Study Plans
+                </button>
+                <h3 class="session-title" id="session-title">Study Session</h3>
+              </div>
+              <div class="session-header-right">
+                <div class="session-timer" id="session-timer">00:00</div>
+                <button class="btn btn--secondary" id="session-pause-btn">Pause</button>
+              </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="session-progress">
+              <div class="progress-bar">
+                <div class="progress-fill" id="session-progress-fill"></div>
+              </div>
+              <div class="progress-text">
+                <span id="session-progress-text">Item 1 of 10</span>
+              </div>
+            </div>
+
+            <!-- Study Item Display Area -->
+            <div class="study-item-container" id="study-item-container">
+              <!-- Flashcard Type -->
+              <div class="study-item flashcard-item" id="flashcard-view" style="display: none;">
+                <div class="flashcard" id="flashcard">
+                  <div class="flashcard-front">
+                    <div class="card-label">Question</div>
+                    <div class="card-content" id="flashcard-question"></div>
+                    <button class="btn btn--primary" id="flashcard-flip-btn">Show Answer</button>
+                  </div>
+                  <div class="flashcard-back" style="display: none;">
+                    <div class="card-label">Answer</div>
+                    <div class="card-content" id="flashcard-answer"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Question Type (Active Recall) -->
+              <div class="study-item question-item" id="question-view" style="display: none;">
+                <div class="question-card">
+                  <div class="card-label">Question</div>
+                  <div class="card-content" id="question-content"></div>
+                  <div class="answer-input-area">
+                    <textarea
+                      id="question-answer-input"
+                      placeholder="Type your answer here..."
+                      rows="6"
+                    ></textarea>
+                    <button class="btn btn--primary" id="show-answer-btn">Show Answer</button>
+                  </div>
+                  <div class="correct-answer" id="correct-answer" style="display: none;">
+                    <div class="card-label">Correct Answer</div>
+                    <div class="card-content" id="correct-answer-content"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Explanation Type (Feynman Technique) -->
+              <div class="study-item explanation-item" id="explanation-view" style="display: none;">
+                <div class="explanation-card">
+                  <div class="card-label">Explain this concept in simple terms</div>
+                  <div class="card-content" id="explanation-prompt"></div>
+                  <div class="explanation-input-area">
+                    <textarea
+                      id="explanation-input"
+                      placeholder="Explain the concept as if teaching a beginner..."
+                      rows="8"
+                    ></textarea>
+                    <button class="btn btn--primary" id="evaluate-explanation-btn">
+                      Evaluate My Explanation
+                    </button>
+                  </div>
+                  <div class="evaluation-result" id="evaluation-result" style="display: none;">
+                    <div class="evaluation-score">
+                      <span class="score-label">Score:</span>
+                      <span class="score-value" id="evaluation-score">0</span>/10
+                    </div>
+                    <div class="evaluation-feedback">
+                      <h4>Strengths</h4>
+                      <ul id="evaluation-strengths"></ul>
+                      <h4>Areas to Improve</h4>
+                      <ul id="evaluation-gaps"></ul>
+                      <h4>Suggestions</h4>
+                      <ul id="evaluation-suggestions"></ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quality Rating -->
+            <div class="quality-rating" id="quality-rating" style="display: none;">
+              <div class="rating-label">How well did you know this?</div>
+              <div class="rating-buttons">
+                <button class="rating-btn" data-quality="0">
+                  <span class="rating-emoji">😰</span>
+                  <span class="rating-text">Didn't Know</span>
+                </button>
+                <button class="rating-btn" data-quality="3">
+                  <span class="rating-emoji">😐</span>
+                  <span class="rating-text">Hard</span>
+                </button>
+                <button class="rating-btn" data-quality="4">
+                  <span class="rating-emoji">🙂</span>
+                  <span class="rating-text">Good</span>
+                </button>
+                <button class="rating-btn" data-quality="5">
+                  <span class="rating-emoji">😄</span>
+                  <span class="rating-text">Easy</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Navigation Controls -->
+            <div class="session-controls">
+              <button class="btn btn--secondary" id="session-prev-btn" disabled>
+                Previous
+              </button>
+              <button class="btn btn--secondary" id="session-skip-btn">
+                Skip
+              </button>
+              <button class="btn btn--primary" id="session-next-btn" disabled>
+                Next Item
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -186,6 +321,57 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn--secondary" data-modal="modal-settings">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session Complete Modal -->
+  <div class="modal" id="modal-session-complete" style="display: none;">
+    <div class="modal-content modal-content--large">
+      <div class="modal-header">
+        <h3>Session Complete!</h3>
+        <button class="modal-close" data-modal="modal-session-complete">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="session-summary">
+          <div class="summary-stats">
+            <div class="summary-stat">
+              <div class="stat-icon">📚</div>
+              <div class="stat-info">
+                <div class="stat-value" id="summary-items-reviewed">0</div>
+                <div class="stat-label">Items Reviewed</div>
+              </div>
+            </div>
+            <div class="summary-stat">
+              <div class="stat-icon">⏱️</div>
+              <div class="stat-info">
+                <div class="stat-value" id="summary-time-spent">0m</div>
+                <div class="stat-label">Time Spent</div>
+              </div>
+            </div>
+            <div class="summary-stat">
+              <div class="stat-icon">✓</div>
+              <div class="stat-info">
+                <div class="stat-value" id="summary-completion">0%</div>
+                <div class="stat-label">Completion</div>
+              </div>
+            </div>
+            <div class="summary-stat">
+              <div class="stat-icon">⭐</div>
+              <div class="stat-info">
+                <div class="stat-value" id="summary-avg-quality">0</div>
+                <div class="stat-label">Avg Quality</div>
+              </div>
+            </div>
+          </div>
+          <div class="summary-message" id="summary-message">
+            Great work! Keep up the consistent practice.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" data-modal="modal-session-complete">Close</button>
+        <button class="btn btn--primary" id="btn-continue-studying">Continue Studying</button>
       </div>
     </div>
   </div>

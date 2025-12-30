@@ -6,6 +6,7 @@ const AIClient = require('./app/js/ai-client');
 const StudyPlanGenerator = require('./app/js/study-plan');
 const FileWatcher = require('./app/js/file-watcher');
 const SpacedRepetition = require('./app/js/learning-modes/spaced-repetition');
+const SessionManager = require('./app/js/session-manager');
 
 const store = new Store();
 let mainWindow;
@@ -14,6 +15,7 @@ let aiClient;
 let studyPlanGenerator;
 let fileWatcher;
 let spacedRepetition;
+let sessionManager;
 
 // Default app configuration
 const defaultConfig = {
@@ -161,6 +163,7 @@ app.on('ready', () => {
   });
   studyPlanGenerator = new StudyPlanGenerator(fileManager, aiClient);
   spacedRepetition = new SpacedRepetition();
+  sessionManager = new SessionManager(fileManager, spacedRepetition, aiClient);
 
   createWindow();
   createMenu();
@@ -416,6 +419,104 @@ ipcMain.handle('ai:generate-objectives', async (event, markdown) => {
     return await aiClient.generateLearningObjectives(markdown);
   } catch (error) {
     console.error('Error generating objectives:', error);
+    throw error;
+  }
+});
+
+// IPC Handlers - Session Management
+ipcMain.handle('session:start', async (event, projectId, planId, options) => {
+  try {
+    if (!sessionManager) {
+      throw new Error('Session manager not initialized');
+    }
+    return await sessionManager.startSession(projectId, planId, options);
+  } catch (error) {
+    console.error('Error starting session:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('session:get-current', async (event, sessionId) => {
+  try {
+    return await sessionManager.getCurrentSession(sessionId);
+  } catch (error) {
+    console.error('Error getting current session:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('session:next-item', async (event, sessionId) => {
+  try {
+    return await sessionManager.nextItem(sessionId);
+  } catch (error) {
+    console.error('Error navigating to next item:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('session:previous-item', async (event, sessionId) => {
+  try {
+    return await sessionManager.previousItem(sessionId);
+  } catch (error) {
+    console.error('Error navigating to previous item:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('session:record-response', async (event, sessionId, itemId, response) => {
+  try {
+    return await sessionManager.recordItemResponse(sessionId, itemId, response);
+  } catch (error) {
+    console.error('Error recording response:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('session:pause', async (event, sessionId) => {
+  try {
+    return await sessionManager.pauseSession(sessionId);
+  } catch (error) {
+    console.error('Error pausing session:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('session:resume', async (event, sessionId) => {
+  try {
+    return await sessionManager.resumeSession(sessionId);
+  } catch (error) {
+    console.error('Error resuming session:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('session:complete', async (event, sessionId) => {
+  try {
+    return await sessionManager.completeSession(sessionId);
+  } catch (error) {
+    console.error('Error completing session:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('session:get-stats', async (event, sessionId) => {
+  try {
+    return await sessionManager.getSessionStats(sessionId);
+  } catch (error) {
+    console.error('Error getting session stats:', error);
+    throw error;
+  }
+});
+
+// IPC Handler - AI Explanation Evaluation
+ipcMain.handle('ai:evaluate-explanation', async (event, originalContent, userExplanation) => {
+  try {
+    if (!aiClient) {
+      throw new Error('AI client not initialized');
+    }
+    return await aiClient.evaluateExplanation(originalContent, userExplanation);
+  } catch (error) {
+    console.error('Error evaluating explanation:', error);
     throw error;
   }
 });

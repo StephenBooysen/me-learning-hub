@@ -398,3 +398,600 @@ window.electronAPI.onMenuNewProject(() => {
 window.electronAPI.onMenuOpenProject(() => {
   switchView('projects');
 });
+
+// ============================================
+// Study Session Management
+// ============================================
+
+let currentSession = null;
+let sessionTimer = null;
+let sessionStartTime = null;
+let sessionPausedTime = 0;
+
+// Session UI Elements
+const sessionView = document.getElementById('view-session');
+const sessionTitle = document.getElementById('session-title');
+const sessionTimerDisplay = document.getElementById('session-timer');
+const sessionProgressFill = document.getElementById('session-progress-fill');
+const sessionProgressText = document.getElementById('session-progress-text');
+
+// Item display elements
+const flashcardView = document.getElementById('flashcard-view');
+const questionView = document.getElementById('question-view');
+const explanationView = document.getElementById('explanation-view');
+
+// Control buttons
+const sessionCloseBtn = document.getElementById('session-close-btn');
+const sessionPauseBtn = document.getElementById('session-pause-btn');
+const sessionPrevBtn = document.getElementById('session-prev-btn');
+const sessionNextBtn = document.getElementById('session-next-btn');
+const sessionSkipBtn = document.getElementById('session-skip-btn');
+
+// Quality rating
+const qualityRating = document.getElementById('quality-rating');
+const ratingButtons = document.querySelectorAll('.rating-btn');
+
+// Flashcard elements
+const flashcardFlipBtn = document.getElementById('flashcard-flip-btn');
+const flashcardQuestion = document.getElementById('flashcard-question');
+const flashcardAnswer = document.getElementById('flashcard-answer');
+
+// Question elements
+const questionContent = document.getElementById('question-content');
+const questionAnswerInput = document.getElementById('question-answer-input');
+const showAnswerBtn = document.getElementById('show-answer-btn');
+const correctAnswer = document.getElementById('correct-answer');
+const correctAnswerContent = document.getElementById('correct-answer-content');
+
+// Explanation elements
+const explanationPrompt = document.getElementById('explanation-prompt');
+const explanationInput = document.getElementById('explanation-input');
+const evaluateExplanationBtn = document.getElementById('evaluate-explanation-btn');
+const evaluationResult = document.getElementById('evaluation-result');
+
+// Session complete modal
+const sessionCompleteModal = document.getElementById('modal-session-complete');
+const btnContinueStudying = document.getElementById('btn-continue-studying');
+
+/**
+ * Start a new study session
+ */
+async function startStudySession(projectId, planId, options = {}) {
+  try {
+    // Initialize session via IPC
+    currentSession = await window.electronAPI.startSession(projectId, planId, options);
+
+    // Switch to session view
+    switchView('session');
+
+    // Update UI
+    sessionTitle.textContent = currentSession.planTitle || 'Study Session';
+    updateSessionProgress();
+    displayCurrentItem();
+    startSessionTimer();
+
+    // Show initial state
+    sessionNextBtn.disabled = true;
+    sessionPrevBtn.disabled = true;
+
+  } catch (error) {
+    console.error('Error starting session:', error);
+    showErrorMessage('Failed to start study session');
+  }
+}
+
+/**
+ * Display the current study item
+ */
+function displayCurrentItem() {
+  if (!currentSession || !currentSession.items) return;
+
+  const currentItem = currentSession.items[currentSession.currentIndex];
+  if (!currentItem) return;
+
+  // Hide all item views
+  flashcardView.style.display = 'none';
+  questionView.style.display = 'none';
+  explanationView.style.display = 'none';
+  qualityRating.style.display = 'none';
+
+  // Reset item states
+  resetItemStates();
+
+  // Display based on item type
+  switch (currentItem.type) {
+    case 'Flashcard':
+      displayFlashcard(currentItem);
+      break;
+    case 'Question':
+      displayQuestion(currentItem);
+      break;
+    case 'Explanation':
+      displayExplanation(currentItem);
+      break;
+    default:
+      displayFlashcard(currentItem); // Default to flashcard
+  }
+
+  // Update navigation
+  updateNavigationButtons();
+}
+
+/**
+ * Display flashcard item
+ */
+function displayFlashcard(item) {
+  flashcardView.style.display = 'block';
+  flashcardQuestion.textContent = item.content.question || item.content;
+  flashcardAnswer.textContent = item.content.answer || '';
+
+  // Show front, hide back
+  document.querySelector('.flashcard-front').style.display = 'block';
+  document.querySelector('.flashcard-back').style.display = 'none';
+  flashcardFlipBtn.textContent = 'Show Answer';
+
+  // Apply technique-specific styling
+  const flashcard = document.querySelector('.flashcard');
+  flashcard.className = 'flashcard technique-' +
+    (item.technique || 'spaced-repetition').toLowerCase().replace(/\s+/g, '-');
+}
+
+/**
+ * Display question item
+ */
+function displayQuestion(item) {
+  questionView.style.display = 'block';
+  questionContent.textContent = item.content.question || item.content;
+  correctAnswerContent.textContent = item.content.answer || '';
+  questionAnswerInput.value = '';
+  correctAnswer.style.display = 'none';
+}
+
+/**
+ * Display explanation item (Feynman)
+ */
+function displayExplanation(item) {
+  explanationView.style.display = 'block';
+  explanationPrompt.textContent = item.content.prompt || item.content;
+  explanationInput.value = '';
+  evaluationResult.style.display = 'none';
+}
+
+/**
+ * Flip flashcard
+ */
+flashcardFlipBtn?.addEventListener('click', () => {
+  const front = document.querySelector('.flashcard-front');
+  const back = document.querySelector('.flashcard-back');
+
+  if (front.style.display !== 'none') {
+    // Show back
+    front.style.display = 'none';
+    back.style.display = 'block';
+    flashcardFlipBtn.textContent = 'Show Question';
+
+    // Show quality rating
+    qualityRating.style.display = 'block';
+  } else {
+    // Show front
+    front.style.display = 'block';
+    back.style.display = 'none';
+    flashcardFlipBtn.textContent = 'Show Answer';
+    qualityRating.style.display = 'none';
+  }
+});
+
+/**
+ * Show answer for question
+ */
+showAnswerBtn?.addEventListener('click', () => {
+  correctAnswer.style.display = 'block';
+  qualityRating.style.display = 'block';
+  showAnswerBtn.disabled = true;
+});
+
+/**
+ * Evaluate explanation (Feynman)
+ */
+evaluateExplanationBtn?.addEventListener('click', async () => {
+  const currentItem = currentSession.items[currentSession.currentIndex];
+  const explanation = explanationInput.value.trim();
+
+  if (!explanation) {
+    showErrorMessage('Please enter your explanation first');
+    return;
+  }
+
+  try {
+    evaluateExplanationBtn.disabled = true;
+    evaluateExplanationBtn.textContent = 'Evaluating...';
+
+    const evaluation = await window.electronAPI.evaluateExplanation(
+      currentItem.content.originalContent || currentItem.content,
+      explanation
+    );
+
+    // Display evaluation
+    displayEvaluation(evaluation);
+
+    // Auto-record with quality based on score
+    const quality = Math.floor(evaluation.score / 2); // Convert 0-10 to 0-5
+    await recordItemResponse(quality);
+
+  } catch (error) {
+    console.error('Error evaluating explanation:', error);
+    showErrorMessage('Failed to evaluate explanation');
+  } finally {
+    evaluateExplanationBtn.disabled = false;
+    evaluateExplanationBtn.textContent = 'Evaluate My Explanation';
+  }
+});
+
+/**
+ * Display AI evaluation results
+ */
+function displayEvaluation(evaluation) {
+  evaluationResult.style.display = 'block';
+
+  document.getElementById('evaluation-score').textContent = evaluation.score;
+
+  // Strengths
+  const strengthsList = document.getElementById('evaluation-strengths');
+  strengthsList.innerHTML = '';
+  (evaluation.strengths || []).forEach(strength => {
+    const li = document.createElement('li');
+    li.textContent = strength;
+    strengthsList.appendChild(li);
+  });
+
+  // Gaps
+  const gapsList = document.getElementById('evaluation-gaps');
+  gapsList.innerHTML = '';
+  (evaluation.gaps || []).forEach(gap => {
+    const li = document.createElement('li');
+    li.textContent = gap;
+    gapsList.appendChild(li);
+  });
+
+  // Suggestions
+  const suggestionsList = document.getElementById('evaluation-suggestions');
+  suggestionsList.innerHTML = '';
+  (evaluation.suggestions || []).forEach(suggestion => {
+    const li = document.createElement('li');
+    li.textContent = suggestion;
+    suggestionsList.appendChild(li);
+  });
+
+  // Show quality rating
+  qualityRating.style.display = 'block';
+}
+
+/**
+ * Handle quality rating selection
+ */
+ratingButtons.forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const quality = parseInt(btn.dataset.quality);
+
+    // Visual feedback
+    ratingButtons.forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+
+    // Record response
+    await recordItemResponse(quality);
+
+    // Enable next button
+    sessionNextBtn.disabled = false;
+  });
+});
+
+/**
+ * Record item response
+ */
+async function recordItemResponse(quality) {
+  const currentItem = currentSession.items[currentSession.currentIndex];
+  const timeSpent = Math.floor((Date.now() - sessionStartTime - sessionPausedTime) / 1000);
+
+  try {
+    const response = {
+      quality: quality,
+      timeSpent: timeSpent,
+      timestamp: new Date().toISOString()
+    };
+
+    await window.electronAPI.recordResponse(
+      currentSession.id,
+      currentItem.id,
+      response
+    );
+
+  } catch (error) {
+    console.error('Error recording response:', error);
+  }
+}
+
+/**
+ * Navigate to next item
+ */
+sessionNextBtn?.addEventListener('click', async () => {
+  if (currentSession.currentIndex < currentSession.items.length - 1) {
+    currentSession.currentIndex++;
+    updateSessionProgress();
+    displayCurrentItem();
+  } else {
+    // Session complete
+    await completeSession();
+  }
+});
+
+/**
+ * Navigate to previous item
+ */
+sessionPrevBtn?.addEventListener('click', () => {
+  if (currentSession.currentIndex > 0) {
+    currentSession.currentIndex--;
+    updateSessionProgress();
+    displayCurrentItem();
+  }
+});
+
+/**
+ * Skip current item
+ */
+sessionSkipBtn?.addEventListener('click', async () => {
+  // Record skip with quality 0
+  await recordItemResponse(0);
+
+  // Move to next
+  if (currentSession.currentIndex < currentSession.items.length - 1) {
+    currentSession.currentIndex++;
+    updateSessionProgress();
+    displayCurrentItem();
+  } else {
+    await completeSession();
+  }
+});
+
+/**
+ * Update session progress
+ */
+function updateSessionProgress() {
+  if (!currentSession) return;
+
+  const current = currentSession.currentIndex + 1;
+  const total = currentSession.items.length;
+  const percentage = (current / total) * 100;
+
+  sessionProgressFill.style.width = `${percentage}%`;
+  sessionProgressText.textContent = `Item ${current} of ${total}`;
+
+  // Update navigation buttons
+  sessionPrevBtn.disabled = currentSession.currentIndex === 0;
+}
+
+/**
+ * Update navigation buttons state
+ */
+function updateNavigationButtons() {
+  sessionPrevBtn.disabled = currentSession.currentIndex === 0;
+  sessionNextBtn.disabled = true; // Enabled after quality rating
+}
+
+/**
+ * Start session timer
+ */
+function startSessionTimer() {
+  sessionStartTime = Date.now();
+  sessionPausedTime = 0;
+
+  sessionTimer = setInterval(() => {
+    const elapsed = Date.now() - sessionStartTime - sessionPausedTime;
+    const minutes = Math.floor(elapsed / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+
+    sessionTimerDisplay.textContent =
+      `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }, 1000);
+}
+
+/**
+ * Pause/resume session
+ */
+sessionPauseBtn?.addEventListener('click', async () => {
+  if (!currentSession.pausedAt) {
+    // Pause
+    currentSession.pausedAt = Date.now();
+    sessionPauseBtn.textContent = 'Resume';
+    clearInterval(sessionTimer);
+
+    await window.electronAPI.pauseSession(currentSession.id);
+  } else {
+    // Resume
+    sessionPausedTime += Date.now() - currentSession.pausedAt;
+    currentSession.pausedAt = null;
+    sessionPauseBtn.textContent = 'Pause';
+    startSessionTimer();
+
+    await window.electronAPI.resumeSession(currentSession.id);
+  }
+});
+
+/**
+ * Complete session
+ */
+async function completeSession() {
+  try {
+    clearInterval(sessionTimer);
+
+    // Get final stats
+    const stats = await window.electronAPI.completeSession(currentSession.id);
+
+    // Show summary modal
+    displaySessionSummary(stats);
+
+    // Clear current session
+    currentSession = null;
+
+  } catch (error) {
+    console.error('Error completing session:', error);
+    showErrorMessage('Failed to complete session');
+  }
+}
+
+/**
+ * Display session summary
+ */
+function displaySessionSummary(stats) {
+  document.getElementById('summary-items-reviewed').textContent = stats.itemsReviewed;
+  document.getElementById('summary-time-spent').textContent =
+    `${Math.floor(stats.totalTime / 60)}m`;
+  document.getElementById('summary-completion').textContent =
+    `${stats.completionRate}%`;
+  document.getElementById('summary-avg-quality').textContent =
+    stats.averageQuality.toFixed(1);
+
+  // Motivational message
+  document.getElementById('summary-message').textContent = stats.message;
+
+  openModal('modal-session-complete');
+}
+
+/**
+ * Continue studying - start new session
+ */
+btnContinueStudying?.addEventListener('click', () => {
+  closeModal('modal-session-complete');
+  switchView('study');
+  // User can select another plan to study
+});
+
+/**
+ * Close session
+ */
+sessionCloseBtn?.addEventListener('click', async () => {
+  if (currentSession && currentSession.itemsReviewed > 0) {
+    const confirm = window.confirm('Are you sure you want to exit? Your progress will be saved.');
+    if (!confirm) return;
+
+    await window.electronAPI.pauseSession(currentSession.id);
+  }
+
+  clearInterval(sessionTimer);
+  currentSession = null;
+  switchView('study');
+});
+
+/**
+ * Reset item states
+ */
+function resetItemStates() {
+  // Reset flashcard
+  const front = document.querySelector('.flashcard-front');
+  const back = document.querySelector('.flashcard-back');
+  if (front && back) {
+    front.style.display = 'block';
+    back.style.display = 'none';
+  }
+  if (flashcardFlipBtn) {
+    flashcardFlipBtn.textContent = 'Show Answer';
+  }
+
+  // Reset question
+  questionAnswerInput.value = '';
+  correctAnswer.style.display = 'none';
+  if (showAnswerBtn) {
+    showAnswerBtn.disabled = false;
+  }
+
+  // Reset explanation
+  explanationInput.value = '';
+  evaluationResult.style.display = 'none';
+
+  // Reset rating
+  ratingButtons.forEach(b => b.classList.remove('selected'));
+  qualityRating.style.display = 'none';
+
+  // Reset buttons
+  sessionNextBtn.disabled = true;
+}
+
+/**
+ * Load study plans and enable session start
+ */
+async function loadStudyPlansWithSessions() {
+  try {
+    if (!currentProject) {
+      document.getElementById('study-plans-list').innerHTML =
+        '<p class="empty-state">Select a project first.</p>';
+      return;
+    }
+
+    const plans = await window.electronAPI.listStudyPlans(currentProject.id);
+    const container = document.getElementById('study-plans-list');
+    container.innerHTML = '';
+
+    if (plans.length === 0) {
+      container.innerHTML = '<p class="empty-state">No study plans yet.</p>';
+      return;
+    }
+
+    plans.forEach(plan => {
+      const card = createStudyPlanCard(plan);
+      container.appendChild(card);
+    });
+
+  } catch (error) {
+    console.error('Error loading study plans:', error);
+  }
+}
+
+/**
+ * Create study plan card with session start button
+ */
+function createStudyPlanCard(plan) {
+  const card = document.createElement('div');
+  card.className = 'study-plan-card';
+  card.innerHTML = `
+    <div class="card-title">${escapeHtml(plan.title)}</div>
+    <div class="card-description">
+      ${(plan.techniques || []).join(', ')}
+    </div>
+    <div class="card-meta">
+      <span>${plan.totalItems || 0} items</span>
+      <span>${plan.completed || 0}/${plan.totalItems || 0} completed</span>
+    </div>
+    <div class="card-actions" style="margin-top: 12px;">
+      <button class="btn btn--primary btn-start-session" data-plan-id="${plan.id}">
+        Start Session
+      </button>
+    </div>
+  `;
+
+  // Add event listener
+  const startBtn = card.querySelector('.btn-start-session');
+  startBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startStudySession(currentProject.id, plan.id);
+  });
+
+  return card;
+}
+
+// Hook into existing view switching
+const originalSwitchView = window.switchView;
+window.switchView = function(viewName) {
+  originalSwitchView.call(this, viewName);
+  if (viewName === 'study') {
+    loadStudyPlansWithSessions();
+  }
+};
+
+// Ensure modals have proper close functionality
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-close')) {
+    const modalId = e.target.dataset.modal;
+    if (modalId === 'modal-session-complete') {
+      closeModal(modalId);
+    }
+  }
+});
