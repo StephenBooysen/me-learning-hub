@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Me Learning Hub</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1 class="app-title">Learning Hub</h1>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-button nav-button--active" data-view="dashboard">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Dashboard</span>
+        </button>
+        <button class="nav-button" data-view="projects">
+          <span class="nav-icon">📁</span>
+          <span class="nav-label">Projects</span>
+        </button>
+        <button class="nav-button" data-view="documents">
+          <span class="nav-icon">📄</span>
+          <span class="nav-label">Documents</span>
+        </button>
+        <button class="nav-button" data-view="study">
+          <span class="nav-icon">🎓</span>
+          <span class="nav-label">Study Plans</span>
+        </button>
+        <button class="nav-button" data-view="progress">
+          <span class="nav-icon">📈</span>
+          <span class="nav-label">Progress</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="sidebar-btn" id="settings-btn">
+          <span>⚙️</span>
+          <span>Settings</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <button class="toggle-sidebar" id="toggle-sidebar">☰</button>
+          <h2 class="page-title">Dashboard</h2>
+        </div>
+        <div class="header-right">
+          <button class="btn btn--primary" id="new-project-btn">+ New Project</button>
+        </div>
+      </header>
+
+      <!-- Content Area -->
+      <div class="content">
+        <!-- Dashboard View (Default) -->
+        <div class="view" id="view-dashboard">
+          <div class="dashboard-grid">
+            <div class="stat-card">
+              <div class="stat-value" id="stat-projects">0</div>
+              <div class="stat-label">Projects</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-documents">0</div>
+              <div class="stat-label">Documents</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-plans">0</div>
+              <div class="stat-label">Study Plans</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-sessions">0</div>
+              <div class="stat-label">Study Sessions</div>
+            </div>
+          </div>
+
+          <div class="dashboard-section">
+            <h3>Recent Projects</h3>
+            <div id="recent-projects" class="project-list">
+              <p class="empty-state">No projects yet. Create one to get started!</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Projects View -->
+        <div class="view" id="view-projects" style="display: none;">
+          <div class="view-header">
+            <h3>My Projects</h3>
+            <button class="btn btn--primary" id="create-project-btn">+ New Project</button>
+          </div>
+          <div id="projects-list" class="project-list">
+            <p class="empty-state">No projects yet.</p>
+          </div>
+        </div>
+
+        <!-- Documents View -->
+        <div class="view" id="view-documents" style="display: none;">
+          <div class="view-header">
+            <h3>Documents</h3>
+          </div>
+          <div id="documents-list" class="document-list">
+            <p class="empty-state">Select a project to view documents.</p>
+          </div>
+        </div>
+
+        <!-- Study Plans View -->
+        <div class="view" id="view-study" style="display: none;">
+          <div class="view-header">
+            <h3>Study Plans</h3>
+          </div>
+          <div id="study-plans-list" class="study-plan-list">
+            <p class="empty-state">No study plans yet.</p>
+          </div>
+        </div>
+
+        <!-- Progress View -->
+        <div class="view" id="view-progress" style="display: none;">
+          <div class="view-header">
+            <h3>Learning Progress</h3>
+          </div>
+          <div id="progress-content" class="progress-content">
+            <p class="empty-state">Start studying to see your progress.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <!-- New Project Modal -->
+  <div class="modal" id="modal-new-project" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create New Project</h3>
+        <button class="modal-close" data-modal="modal-new-project">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-new-project">
+          <div class="form-group">
+            <label for="project-name">Project Name</label>
+            <input type="text" id="project-name" placeholder="Enter project name" required>
+          </div>
+          <div class="form-group">
+            <label for="project-description">Description (Optional)</label>
+            <textarea id="project-description" placeholder="Enter project description"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" data-modal="modal-new-project">Cancel</button>
+        <button class="btn btn--primary" id="btn-create-project">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal" id="modal-settings" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Settings</h3>
+        <button class="modal-close" data-modal="modal-settings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <h4>Data Directory</h4>
+          <div class="settings-row">
+            <input type="text" id="data-dir" placeholder="Data directory" readonly>
+            <button class="btn btn--secondary" id="btn-change-data-dir">Browse</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h4>Theme</h4>
+          <select id="theme-select">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--secondary" data-modal="modal-settings">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/renderer.js"></script>
+</body>
+</html>

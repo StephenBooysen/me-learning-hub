@@ -1,0 +1,33 @@
+{
+  "name": "me-learning-hub",
+  "version": "1.0.0",
+  "description": "An intelligent learning platform that captures web content and transforms it into personalized study materials using advanced learning techniques",
+  "homepage": "https://github.com/StephenBooysen/me-learning-hub#readme",
+  "bugs": {
+    "url": "https://github.com/StephenBooysen/me-learning-hub/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StephenBooysen/me-learning-hub.git"
+  },
+  "license": "ISC",
+  "author": "Stephen Booysen",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "scripts": {
+    "electron:dev": "cd electron && npm run dev",
+    "electron:start": "cd electron && npm start",
+    "extension:build": "echo 'Build extension - to be configured'",
+    "test": "jest",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0"
+  }
+}
+
