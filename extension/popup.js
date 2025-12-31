@@ -1,577 +1,350 @@
 /**
- * Popup Logic
- * Handles UI interactions and communication with background script
+ * Popup Script
+ * Handles UI logic and user interactions
  */
-
-let currentView = 'extraction';
-let currentExtraction = null;
-let projects = [];
 
 // DOM Elements
-const views = document.querySelectorAll('.view');
-const btnCaptureFullPage = document.getElementById('btn-capture-page');
-const btnCaptureSelection = document.getElementById('btn-capture-selection');
-const btnSettings = document.getElementById('settings-btn');
-const btnBack = document.getElementById('btn-back');
-const btnBackSettings = document.getElementById('btn-back-settings');
-const btnCancelSave = document.getElementById('btn-cancel-save');
-const btnSaveDocument = document.getElementById('btn-save-document');
-const btnStatusClose = document.getElementById('btn-status-close');
-const btnResetSettings = document.getElementById('btn-reset-settings');
-const btnCancelImport = document.getElementById('btn-cancel-import');
-const btnImportAnyway = document.getElementById('btn-import-anyway');
+const projectSelect = document.getElementById('projectSelect');
+const captureTypeRadios = document.querySelectorAll('input[name="captureType"]');
+const autoGenerateCheckbox = document.getElementById('autoGenerateStudyPlan');
+const captureButton = document.getElementById('captureButton');
+const settingsButton = document.getElementById('settingsButton');
+const loadingOverlay = document.getElementById('loadingOverlay');
+const metadataSection = document.getElementById('metadataSection');
+const connectionStatus = document.getElementById('connectionStatus');
+const duplicateWarning = document.getElementById('duplicateWarning');
+const successMessage = document.getElementById('successMessage');
+const errorMessage = document.getElementById('errorMessage');
+const actionButtons = document.getElementById('actionButtons');
+const overrideButton = document.getElementById('overrideButton');
+const cancelButton = document.getElementById('cancelButton');
 
-// Loading and Status Elements
-const loadingOverlay = document.getElementById('loading-overlay');
-const duplicateWarning = document.getElementById('duplicate-warning');
-const duplicateMessage = document.getElementById('duplicate-message');
-
-// Form Elements
-const previewTitle = document.getElementById('preview-title');
-const previewUrl = document.getElementById('preview-url');
-const previewProject = document.getElementById('preview-project');
-const previewContent = document.getElementById('preview-content');
-const previewTags = document.getElementById('preview-tags');
-const previewAutoGeneratePlan = document.getElementById('preview-auto-generate-plan');
-const projectsList = document.getElementById('projects-list');
-
-// Metadata Elements
-const previewWordCount = document.getElementById('preview-word-count');
-const previewReadingTime = document.getElementById('preview-reading-time');
-const previewDomain = document.getElementById('preview-domain');
-
-// Settings Elements
-const settingDefaultProject = document.getElementById('setting-default-project');
-const settingAutoSave = document.getElementById('setting-auto-save');
-const settingCopyClipboard = document.getElementById('setting-copy-clipboard');
-const settingContextMenu = document.getElementById('setting-context-menu');
-const settingIncludeImages = document.getElementById('setting-include-images');
-const settingIncludeLinks = document.getElementById('setting-include-links');
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  initializeEventListeners();
-  loadProjects();
-  loadSettings();
-  checkForLastExtraction();
-});
-
-/**
- * Initialize all event listeners
- */
-function initializeEventListeners() {
-  // Capture buttons
-  btnCaptureFullPage.addEventListener('click', captureFullPage);
-  btnCaptureSelection.addEventListener('click', captureSelection);
-
-  // Settings
-  btnSettings.addEventListener('click', () => switchView('settings'));
-  btnBack.addEventListener('click', () => switchView('extraction'));
-  btnBackSettings.addEventListener('click', () => switchView('extraction'));
-  btnResetSettings.addEventListener('click', resetSettings);
-
-  // Preview/Save
-  btnCancelSave.addEventListener('click', () => switchView('extraction'));
-  btnSaveDocument.addEventListener('click', saveDocument);
-
-  // Status
-  btnStatusClose.addEventListener('click', () => switchView('extraction'));
-
-  // Settings changes
-  settingAutoSave.addEventListener('change', () => saveSettings());
-  settingCopyClipboard.addEventListener('change', () => saveSettings());
-  settingContextMenu.addEventListener('change', () => saveSettings());
-  settingIncludeImages.addEventListener('change', () => saveSettings());
-  settingIncludeLinks.addEventListener('change', () => saveSettings());
-  settingDefaultProject.addEventListener('change', () => saveSettings());
-
-  // Project selection in extraction view
-  projectsList.addEventListener('click', (e) => {
-    const projectItem = e.target.closest('.project-item');
-    if (projectItem) {
-      const projectId = projectItem.dataset.projectId;
-      previewProject.value = projectId;
-      captureCurrentPage();
-    }
-  });
-
-  // Duplicate handling
-  btnCancelImport.addEventListener('click', () => {
-    hideDuplicateWarning();
-    switchView('extraction');
-  });
-
-  btnImportAnyway.addEventListener('click', () => {
-    hideDuplicateWarning();
-    saveDocument(true);
-  });
-}
+let currentContent = null;
+let currentMetadata = null;
+let pendingDuplicate = null;
 
 /**
  * Show loading overlay
  */
-function showLoadingOverlay() {
-  loadingOverlay.style.display = 'flex';
+function showLoading() {
+    loadingOverlay.style.display = 'flex';
 }
 
 /**
  * Hide loading overlay
  */
-function hideLoadingOverlay() {
-  loadingOverlay.style.display = 'none';
+function hideLoading() {
+    loadingOverlay.style.display = 'none';
+}
+
+/**
+ * Update connection status indicator
+ */
+async function updateConnectionStatus() {
+    try {
+        chrome.runtime.sendMessage(
+            { action: 'checkBridgeConnection' },
+            (response) => {
+                if (response.success && response.connected) {
+                    connectionStatus.textContent = '●';
+                    connectionStatus.classList.add('connected');
+                    connectionStatus.classList.remove('disconnected');
+                } else {
+                    connectionStatus.textContent = '●';
+                    connectionStatus.classList.add('disconnected');
+                    connectionStatus.classList.remove('connected');
+                }
+            }
+        );
+    } catch (error) {
+        console.error('Error checking connection:', error);
+        connectionStatus.classList.add('disconnected');
+    }
+}
+
+/**
+ * Load projects from Electron app
+ */
+function loadProjects() {
+    projectSelect.innerHTML = '<option value="">Loading projects...</option>';
+    projectSelect.disabled = true;
+
+    chrome.runtime.sendMessage(
+        { action: 'fetchProjects' },
+        (response) => {
+            projectSelect.disabled = false;
+
+            if (response.success && response.projects && response.projects.length > 0) {
+                projectSelect.innerHTML = '<option value="">-- Select a Project --</option>';
+                response.projects.forEach(project => {
+                    const option = document.createElement('option');
+                    option.value = project.id;
+                    option.textContent = project.name;
+                    projectSelect.appendChild(option);
+                });
+            } else {
+                const errorMsg = response.error || 'No projects found. Please create a project in Me Learning Hub first.';
+                projectSelect.innerHTML = `<option value="" disabled>${errorMsg}</option>`;
+            }
+        }
+    );
+}
+
+/**
+ * Show error message
+ */
+function showError(title, message) {
+    errorMessage.style.display = 'block';
+    document.getElementById('errorDetail').textContent = message;
+    successMessage.style.display = 'none';
+    duplicateWarning.style.display = 'none';
+}
+
+/**
+ * Show success message
+ */
+function showSuccess(title, message) {
+    successMessage.style.display = 'block';
+    document.getElementById('successDetail').textContent = message;
+    errorMessage.style.display = 'none';
+    duplicateWarning.style.display = 'none';
+    actionButtons.style.display = 'none';
 }
 
 /**
  * Show duplicate warning
  */
-function showDuplicateWarning(existingDoc) {
-  duplicateMessage.textContent = existingDoc.title
-    ? `This document has already been imported: "${existingDoc.title}"`
-    : 'This document has already been imported from this URL';
-  duplicateWarning.style.display = 'block';
+function showDuplicate(existingDoc) {
+    duplicateWarning.style.display = 'block';
+    const message = `Similar content already exists: "${existingDoc.title || 'Untitled'}"`;
+    document.getElementById('duplicateMessage').textContent = message;
+    errorMessage.style.display = 'none';
+    successMessage.style.display = 'none';
 }
 
 /**
- * Hide duplicate warning
+ * Display page metadata
  */
-function hideDuplicateWarning() {
-  duplicateWarning.style.display = 'none';
+function displayMetadata(metadata) {
+    metadataSection.style.display = 'block';
+    document.getElementById('pageTitle').textContent = metadata.title || 'Unknown';
+    document.getElementById('pageUrl').textContent = new URL(metadata.url).hostname;
+    document.getElementById('wordCount').textContent = metadata.wordCount ? `${metadata.wordCount.toLocaleString()}` : '-';
+    document.getElementById('readTime').textContent = metadata.readingTime ? `${metadata.readingTime} min` : '-';
 }
 
 /**
- * Calculate metadata for content
+ * Get current tab's content
  */
-function calculateMetadata(markdown) {
-  // Word count
-  const wordCount = markdown.split(/\s+/).filter(w => w.length > 0).length;
+async function captureContent() {
+    const captureType = document.querySelector('input[name="captureType"]:checked').value;
 
-  // Reading time (approx 200 words per minute)
-  const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+    showLoading();
 
-  return { wordCount, readingTime };
-}
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-/**
- * Render markdown content in preview
- */
-function renderMarkdownPreview(markdown) {
-  // Simple markdown rendering - preserve formatting
-  let rendered = markdown
-    .replace(/^### (.*?)$/gm, '<strong>$1</strong>')
-    .replace(/^## (.*?)$/gm, '<h3>$1</h3>')
-    .replace(/^# (.*?)$/gm, '<h2>$1</h2>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .substring(0, 400);
+        // First, inject the content script to ensure it's loaded
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content.js']
+        });
 
-  previewContent.innerHTML = rendered;
-}
+        // Now send the message to capture content
+        chrome.tabs.sendMessage(
+            tab.id,
+            { action: 'getPageContent', captureType: captureType },
+            (response) => {
+                hideLoading();
 
-/**
- * Switch views
- */
-function switchView(viewName) {
-  currentView = viewName;
-  views.forEach(view => view.classList.remove('active'));
-  const targetView = document.getElementById(`view-${viewName}`);
-  if (targetView) {
-    targetView.classList.add('active');
-  }
-}
+                // Check for runtime errors
+                if (chrome.runtime.lastError) {
+                    console.error('Runtime error:', chrome.runtime.lastError);
+                    showError('Error', 'Failed to communicate with page. Try refreshing and try again.');
+                    return;
+                }
 
-/**
- * Capture full page
- */
-async function captureFullPage() {
-  try {
-    btnCaptureFullPage.disabled = true;
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                // Check if response exists
+                if (!response) {
+                    console.error('No response from content script');
+                    showError('Error', 'Failed to capture content. Try refreshing the page.');
+                    return;
+                }
 
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'extractPageContent',
-      type: 'full'
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error:', chrome.runtime.lastError);
-        showStatus('error', 'Error', 'Failed to capture page. Please try again.');
-        return;
-      }
+                if (response.success) {
+                    currentContent = response.content;
+                    currentMetadata = response.metadata;
+                    displayMetadata(currentMetadata);
 
-      if (!response || !response.markdown) {
-        showStatus('error', 'Error', 'No content found to capture.');
-        return;
-      }
-
-      currentExtraction = {
-        title: response.title || tab.title,
-        sourceUrl: tab.url,
-        markdown: response.markdown,
-        html: response.html
-      };
-
-      showPreview();
-      switchView('preview');
-    });
-  } catch (error) {
-    console.error('Error capturing page:', error);
-    showStatus('error', 'Error', error.message);
-  } finally {
-    btnCaptureFullPage.disabled = false;
-  }
-}
-
-/**
- * Capture selected text
- */
-async function captureSelection() {
-  try {
-    btnCaptureSelection.disabled = true;
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'extractSelectedContent'
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error:', chrome.runtime.lastError);
-        showStatus('error', 'Error', 'Failed to capture selection.');
-        return;
-      }
-
-      if (!response || !response.markdown) {
-        showStatus('error', 'No Selection', 'Please select some text first.');
-        return;
-      }
-
-      currentExtraction = {
-        title: response.title || 'Selected Content',
-        sourceUrl: tab.url,
-        markdown: response.markdown,
-        html: response.html
-      };
-
-      showPreview();
-      switchView('preview');
-    });
-  } catch (error) {
-    console.error('Error capturing selection:', error);
-    showStatus('error', 'Error', error.message);
-  } finally {
-    btnCaptureSelection.disabled = false;
-  }
-}
-
-/**
- * Capture current page (from projects list click)
- */
-async function captureCurrentPage() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'extractPageContent',
-      type: 'full'
-    }, (response) => {
-      if (chrome.runtime.lastError || !response?.markdown) {
-        showStatus('error', 'Error', 'Failed to capture page.');
-        return;
-      }
-
-      currentExtraction = {
-        title: response.title || tab.title,
-        sourceUrl: tab.url,
-        markdown: response.markdown,
-        html: response.html
-      };
-
-      showPreview();
-      switchView('preview');
-    });
-  } catch (error) {
-    console.error('Error:', error);
-    showStatus('error', 'Error', error.message);
-  }
-}
-
-/**
- * Show preview of extracted content
- */
-function showPreview() {
-  if (!currentExtraction) return;
-
-  hideDuplicateWarning();
-
-  previewTitle.value = currentExtraction.title;
-  previewUrl.value = currentExtraction.sourceUrl;
-  previewTags.value = '';
-  previewAutoGeneratePlan.checked = true;
-
-  // Render markdown preview
-  renderMarkdownPreview(currentExtraction.markdown);
-
-  // Calculate and display metadata
-  const { wordCount, readingTime } = calculateMetadata(currentExtraction.markdown);
-  previewWordCount.textContent = wordCount.toLocaleString();
-  previewReadingTime.textContent = `${readingTime} min`;
-
-  // Extract and display domain
-  try {
-    const url = new URL(currentExtraction.sourceUrl);
-    previewDomain.textContent = url.hostname;
-  } catch (e) {
-    previewDomain.textContent = '—';
-  }
-
-  // Populate project select
-  previewProject.innerHTML = '<option value="">-- Select a project --</option>';
-  projects.forEach(project => {
-    const option = document.createElement('option');
-    option.value = project.id;
-    option.textContent = project.name;
-    previewProject.appendChild(option);
-  });
-
-  // Set default project if exists
-  chrome.storage.local.get('settings', (result) => {
-    if (result.settings?.defaultProject) {
-      previewProject.value = result.settings.defaultProject;
+                    // After capturing, proceed to save
+                    proceedToSave();
+                } else {
+                    showError('Error', response.error || 'Failed to capture content');
+                }
+            }
+        );
+    } catch (error) {
+        hideLoading();
+        console.error('Capture error:', error);
+        showError('Error', 'Failed to capture content: ' + error.message);
     }
-  });
 }
 
 /**
  * Save document to Electron app
- * @param {boolean} importAnyway - Force import even if duplicate detected
  */
-async function saveDocument(importAnyway = false) {
-  if (!currentExtraction) {
-    showStatus('error', 'Error', 'No content to save.');
-    return;
-  }
+function proceedToSave() {
+    const projectId = projectSelect.value;
+    const autoGenerateStudyPlan = autoGenerateCheckbox.checked;
 
-  const projectId = previewProject.value;
-  const title = previewTitle.value.trim();
-  const tags = previewTags.value.trim();
+    showLoading();
 
-  if (!projectId) {
-    showStatus('error', 'Error', 'Please select a project.');
-    return;
-  }
+    chrome.runtime.sendMessage(
+        {
+            action: 'saveDocument',
+            projectId: projectId,
+            content: currentContent,
+            metadata: currentMetadata,
+            autoGenerateStudyPlan: autoGenerateStudyPlan
+        },
+        (response) => {
+            hideLoading();
 
-  if (!title) {
-    showStatus('error', 'Error', 'Please enter a title.');
-    return;
-  }
+            // Check for runtime errors
+            if (chrome.runtime.lastError) {
+                console.error('Runtime error:', chrome.runtime.lastError);
+                showError('Error', 'Failed to communicate with application. Is the Me Learning Hub app running?');
+                return;
+            }
 
-  try {
-    btnSaveDocument.disabled = true;
-    showLoadingOverlay();
+            // Check if response exists
+            if (!response) {
+                console.error('No response from background script');
+                showError('Error', 'No response from application. Check that Me Learning Hub is running.');
+                return;
+            }
 
-    const docId = generateUUID();
-    const metadata = {
-      title: title,
-      sourceUrl: currentExtraction.sourceUrl,
-      tags: tags ? tags.split(',').map(t => t.trim()) : [],
-      captured: new Date().toISOString()
-    };
+            if (response.success) {
+                showSuccess('Success', `Document saved! (ID: ${response.documentId})`);
+                // Reset after 2 seconds
+                setTimeout(() => {
+                    currentContent = null;
+                    currentMetadata = null;
+                    metadataSection.style.display = 'none';
+                    errorMessage.style.display = 'none';
+                    successMessage.style.display = 'none';
+                    actionButtons.style.display = 'flex';
+                }, 2000);
+            } else if (response.isDuplicate) {
+                pendingDuplicate = response;
+                showDuplicate(response.existingDocument || {});
+                actionButtons.style.display = 'none';
+            } else {
+                showError('Error', response.error || 'Failed to save document');
+            }
+        }
+    );
+}
 
-    // Send to background script for Electron communication
-    chrome.runtime.sendMessage({
-      action: 'saveDocument',
-      projectId: projectId,
-      docId: docId,
-      content: currentExtraction.markdown,
-      metadata: metadata,
-      autoGeneratePlan: previewAutoGeneratePlan.checked
-    }, (response) => {
-      hideLoadingOverlay();
+/**
+ * Handle capture and save workflow
+ */
+function handleCapture() {
+    const projectId = projectSelect.value;
 
-      if (response?.success) {
-        // Copy to clipboard if enabled
-        chrome.storage.local.get('settings', (result) => {
-          if (result.settings?.copyClipboard) {
-            navigator.clipboard.writeText(currentExtraction.markdown);
-          }
+    if (!projectId) {
+        showError('Error', 'Please select a project');
+        return;
+    }
+
+    // First, capture the content from the page
+    if (!currentContent) {
+        captureContent();
+        return;
+    }
+
+    // If content is already captured, proceed to save
+    proceedToSave();
+}
+
+/**
+ * Handle duplicate override
+ */
+function handleOverride() {
+    if (!pendingDuplicate) return;
+
+    const autoGenerateStudyPlan = autoGenerateCheckbox.checked;
+
+    showLoading();
+
+    chrome.runtime.sendMessage(
+        {
+            action: 'overrideDuplicate',
+            projectId: projectSelect.value,
+            content: currentContent,
+            metadata: currentMetadata,
+            autoGenerateStudyPlan: autoGenerateStudyPlan
+        },
+        (response) => {
+            hideLoading();
+
+            if (response.success) {
+                showSuccess('Success', `Document saved successfully!`);
+                pendingDuplicate = null;
+                setTimeout(() => {
+                    currentContent = null;
+                    currentMetadata = null;
+                    metadataSection.style.display = 'none';
+                    errorMessage.style.display = 'none';
+                    successMessage.style.display = 'none';
+                    duplicateWarning.style.display = 'none';
+                    actionButtons.style.display = 'flex';
+                }, 2000);
+            } else {
+                showError('Error', response.error || 'Failed to save document');
+            }
+        }
+    );
+}
+
+/**
+ * Handle cancel duplicate override
+ */
+function handleCancel() {
+    pendingDuplicate = null;
+    duplicateWarning.style.display = 'none';
+    actionButtons.style.display = 'flex';
+}
+
+/**
+ * Initialize event listeners
+ */
+function initializeEventListeners() {
+    captureButton.addEventListener('click', handleCapture);
+    settingsButton.addEventListener('click', () => {
+        chrome.runtime.openOptionsPage();
+    });
+    overrideButton.addEventListener('click', handleOverride);
+    cancelButton.addEventListener('click', handleCancel);
+
+    // Capture on any capture type change (to show/hide selection reminder)
+    captureTypeRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'selection') {
+                // Could show a tooltip here
+            }
         });
-
-        showStatus('success', 'Success!', `Document saved to "${title}"`);
-        currentExtraction = null;
-        setTimeout(() => switchView('extraction'), 2000);
-      } else if (response?.duplicate && !importAnyway) {
-        // Show duplicate warning
-        showDuplicateWarning(response.existingDoc || {});
-      } else {
-        showStatus('error', 'Error', response?.error || 'Failed to save document.');
-      }
-
-      btnSaveDocument.disabled = false;
     });
-  } catch (error) {
-    console.error('Error saving document:', error);
-    hideLoadingOverlay();
-    showStatus('error', 'Error', error.message);
-    btnSaveDocument.disabled = false;
-  }
 }
 
 /**
- * Load projects from Electron
+ * Initialize popup
  */
-async function loadProjects() {
-  try {
-    chrome.runtime.sendMessage({ action: 'listProjects' }, (response) => {
-      if (response?.success && response.data) {
-        projects = response.data;
-        displayProjects();
-        updateProjectSelects();
-      }
-    });
-  } catch (error) {
-    console.error('Error loading projects:', error);
-    projectsList.innerHTML = '<p class="empty-state">Unable to load projects. Is Electron running?</p>';
-  }
-}
+document.addEventListener('DOMContentLoaded', () => {
+    updateConnectionStatus();
+    loadProjects();
+    initializeEventListeners();
 
-/**
- * Display projects in extraction view
- */
-function displayProjects() {
-  projectsList.innerHTML = '';
-
-  if (projects.length === 0) {
-    projectsList.innerHTML = '<p class="empty-state">No projects yet. Create one in Me Learning Hub!</p>';
-    return;
-  }
-
-  const recentProjects = projects.slice(0, 3);
-  recentProjects.forEach(project => {
-    const projectItem = document.createElement('div');
-    projectItem.className = 'project-item';
-    projectItem.dataset.projectId = project.id;
-    projectItem.innerHTML = `
-      <div class="project-name">${escapeHtml(project.name)}</div>
-      <div class="project-meta">${project.documents || 0} documents</div>
-    `;
-    projectsList.appendChild(projectItem);
-  });
-}
-
-/**
- * Update project select dropdowns
- */
-function updateProjectSelects() {
-  [previewProject, settingDefaultProject].forEach(select => {
-    const currentValue = select.value;
-    select.innerHTML = '<option value="">-- Select a project --</option>';
-    projects.forEach(project => {
-      const option = document.createElement('option');
-      option.value = project.id;
-      option.textContent = project.name;
-      select.appendChild(option);
-    });
-    if (currentValue) select.value = currentValue;
-  });
-}
-
-/**
- * Load settings
- */
-function loadSettings() {
-  chrome.storage.local.get('settings', (result) => {
-    const settings = result.settings || {};
-    settingAutoSave.checked = settings.autoSave !== false;
-    settingCopyClipboard.checked = settings.copyClipboard !== false;
-    settingContextMenu.checked = settings.contextMenu !== false;
-    settingIncludeImages.checked = settings.includeImages !== false;
-    settingIncludeLinks.checked = settings.includeLinks !== false;
-    if (settings.defaultProject) {
-      settingDefaultProject.value = settings.defaultProject;
-    }
-  });
-}
-
-/**
- * Save settings
- */
-function saveSettings() {
-  const settings = {
-    autoSave: settingAutoSave.checked,
-    copyClipboard: settingCopyClipboard.checked,
-    contextMenu: settingContextMenu.checked,
-    includeImages: settingIncludeImages.checked,
-    includeLinks: settingIncludeLinks.checked,
-    defaultProject: settingDefaultProject.value
-  };
-
-  chrome.storage.local.set({ settings: settings });
-}
-
-/**
- * Reset settings to defaults
- */
-function resetSettings() {
-  const defaultSettings = {
-    autoSave: true,
-    copyClipboard: true,
-    contextMenu: true,
-    includeImages: true,
-    includeLinks: true,
-    defaultProject: ''
-  };
-
-  chrome.storage.local.set({ settings: defaultSettings }, () => {
-    loadSettings();
-    showStatus('success', 'Success', 'Settings reset to defaults');
-  });
-}
-
-/**
- * Check for last extraction from background script
- */
-function checkForLastExtraction() {
-  chrome.storage.local.get('lastExtraction', (result) => {
-    if (result.lastExtraction) {
-      currentExtraction = result.lastExtraction;
-      showPreview();
-      switchView('preview');
-      chrome.storage.local.remove('lastExtraction');
-    }
-  });
-}
-
-/**
- * Show status message
- */
-function showStatus(type, title, message) {
-  const statusIcon = document.getElementById('status-icon');
-  const statusTitle = document.getElementById('status-title');
-  const statusMessage = document.getElementById('status-message');
-
-  statusIcon.textContent = type === 'success' ? '✓' : '✕';
-  statusIcon.className = `status-icon ${type}`;
-  statusTitle.textContent = title;
-  statusMessage.textContent = message;
-
-  switchView('status');
-}
-
-/**
- * Generate UUID
- */
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-/**
- * Escape HTML special characters
- */
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-console.log('Me Learning Hub popup script loaded');
+    // Refresh connection status every 5 seconds
+    setInterval(updateConnectionStatus, 5000);
+});

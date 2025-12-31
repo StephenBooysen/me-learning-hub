@@ -4,16 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**me-learning-hub** is a learning application that uses a Chrome extension to extract information and generate study plans using advanced study techniques.
+**me-learning-hub** is a desktop learning application built with Electron that helps users create personalized study plans using advanced learning techniques like spaced repetition, active recall, and interleaving.
 
 ### Current Status
 
-This is an early-stage project with minimal setup. The package.json exists but the project lacks:
-- Source code structure (no src/ directory yet)
-- Build system (no bundler configured)
-- Testing framework
-- Linting/formatting tools
-- TypeScript configuration
+The project includes:
+- ✅ Electron-based desktop application
+- ✅ Project and document management system
+- ✅ Study plan generation with SM-2 algorithm
+- ✅ Multiple learning modes (flashcards, questions, etc.)
+- ✅ Progress tracking and analytics dashboard
+- ✅ File-based data persistence
 
 ## Development Setup
 
@@ -21,33 +22,41 @@ This is an early-stage project with minimal setup. The package.json exists but t
 
 ```bash
 npm install
+cd electron && npm install
+```
+
+### Running the Application
+
+```bash
+npm run electron:dev
 ```
 
 ### Testing
-
-Currently no test framework is configured. When setting up tests, use:
 
 ```bash
 npm test
 ```
 
-## Architecture Guidance
+## Architecture
 
-When building out this project, consider these architectural components:
+The application consists of:
 
-1. **Chrome Extension** - The client-side component that extracts information from web pages
-2. **Backend Service** - API to handle study plan generation and data storage
-3. **Study Plan Generator** - Core logic implementing advanced study techniques (spaced repetition, active recall, interleaving, etc.)
-4. **Database** - Persistence layer for study plans and learning progress
+1. **Main Process** (`electron/main.js`) - Handles window management, file system operations, and IPC
+2. **Renderer Process** (`electron/app/js/renderer.js`) - UI logic and view management
+3. **HTTP Bridge** - RESTful API for external integrations
+4. **File System** - JSON-based data storage in user's documents folder
 
-The project should maintain a clear separation between:
-- Extension code (isolated in a dedicated directory)
-- API/backend code (separate from extension)
-- Shared utilities and types (if applicable)
+### Key Components
 
-## Key Implementation Notes
+- **Project Management** - Create, update, and organize learning projects
+- **Document Handler** - Import and manage learning documents
+- **Study Plan Generator** - Creates spaced repetition schedules
+- **Learning Modes** - Interactive flashcards, Q&A, and reading sessions
+- **Analytics** - Tracks learning progress and performance metrics
 
-- Clarify whether this will be a monorepo (extension + backend together) or separate repositories
-- Document the Chrome extension's manifest version and permissions required
-- Define the data structure for study plans and learning progress
-- Decide on technology stack for backend (Node.js, Python, etc.) before implementation
+## Technology Stack
+
+- **Electron** - Desktop application framework
+- **Vanilla JavaScript** - No external dependencies
+- **Bootstrap 5** - UI styling (main app)
+- **File-based JSON** - Data persistence

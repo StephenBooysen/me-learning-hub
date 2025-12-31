@@ -1,6 +1,10 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const Store = require('electron-store');
+const express = require('express');
+const cors = require('cors');
 const FileManager = require('./app/js/file-manager');
 const AIClient = require('./app/js/ai-client');
 const StudyPlanGenerator = require('./app/js/study-plan');
@@ -8,6 +12,8 @@ const FileWatcher = require('./app/js/file-watcher');
 const SpacedRepetition = require('./app/js/learning-modes/spaced-repetition');
 const SessionManager = require('./app/js/session-manager');
 const AnalyticsEngine = require('./app/js/analytics-engine');
+const DocumentProcessor = require('./app/js/document-processor');
+const ContentCleaner = require('./app/js/content-cleaner');
 
 const store = new Store();
 let mainWindow;
@@ -18,20 +24,209 @@ let fileWatcher;
 let spacedRepetition;
 let sessionManager;
 let analyticsEngine;
+let documentProcessor;
+let contentCleaner;
+let httpServer;
+
+// HTTP Bridge Configuration
+const HTTP_BRIDGE_PORT = 47823;
 
 // Default app configuration
-const defaultConfig = {
+const getDefaultConfig = () => ({
   windowWidth: 1200,
   windowHeight: 800,
-  dataDir: path.join(app.getPath('home'), '.me-learning-hub'),
+  dataDir: process.env.DATA_DIR || path.join(__dirname, '..', 'projects'),
   theme: 'light'
-};
+});
+
+const defaultConfig = getDefaultConfig();
 
 // Initialize configuration
 function initConfig() {
   if (!store.has('config')) {
     store.set('config', defaultConfig);
   }
+
+  // Always update dataDir from environment variable if set
+  const config = store.get('config', defaultConfig);
+  const newDataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'projects');
+
+  if (config.dataDir !== newDataDir) {
+    config.dataDir = newDataDir;
+    store.set('config', config);
+    console.log('[DEBUG] Updated data directory to:', newDataDir);
+  }
+}
+
+// Initialize HTTP Bridge for Chrome Extension
+function initHTTPBridge() {
+  const expressApp = express();
+
+  // Middleware
+  expressApp.use(express.json({ limit: '50mb' }));
+  expressApp.use(cors({
+    origin: (origin, callback) => {
+      // Allow all origins (only local connections on localhost:47823)
+      callback(null, true);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type'],
+    credentials: true
+  }));
+
+  // Health check endpoint
+  expressApp.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Get all projects
+  expressApp.get('/api/projects', async (req, res) => {
+    try {
+      const projects = await fileManager.listProjects();
+      res.json({ success: true, projects: projects });
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Save document with AI cleaning and duplicate detection
+  expressApp.post('/api/documents', async (req, res) => {
+    try {
+      let { projectId, content, title, sourceUrl, autoGenerateStudyPlan, override } = req.body;
+
+      // Validation
+      if (!projectId || !content) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields: projectId, content'
+        });
+      }
+
+      console.log('[HTTP Bridge] Processing document for project:', projectId);
+
+      // Clean and validate content with Claude if available
+      let cleanedContent = content;
+      let finalTitle = title || 'Untitled Document';
+      let processingInfo = {};
+
+      if (contentCleaner) {
+        console.log('[HTTP Bridge] Cleaning content with Claude...');
+        try {
+          const cleanResult = await contentCleaner.analyzeContent(content, title, sourceUrl);
+
+          if (cleanResult.isValid) {
+            cleanedContent = cleanResult.content;
+            finalTitle = cleanResult.title;
+            processingInfo = {
+              cleaned: true,
+              qualityScore: cleanResult.qualityScore,
+              topics: cleanResult.topics,
+              wordCount: cleanResult.wordCount
+            };
+            console.log(`[HTTP Bridge] Content cleaned. Quality score: ${cleanResult.qualityScore}/10`);
+          } else {
+            console.log('[HTTP Bridge] Content quality too low, using original');
+            processingInfo = {
+              cleaned: false,
+              reason: cleanResult.reason,
+              qualityScore: cleanResult.qualityScore
+            };
+          }
+        } catch (error) {
+          console.warn('[HTTP Bridge] Content cleaning failed, using original:', error.message);
+          processingInfo = { cleaned: false, error: error.message };
+        }
+      }
+
+      // Check for duplicate by sourceUrl
+      let duplicate = null;
+      if (sourceUrl) {
+        try {
+          const documents = await fileManager.listDocuments(projectId);
+          duplicate = documents.find(doc => doc.sourceUrl === sourceUrl);
+        } catch (error) {
+          console.warn('Error checking for duplicates:', error);
+        }
+      }
+
+      if (duplicate && !override) {
+        return res.status(409).json({
+          success: false,
+          isDuplicate: true,
+          error: 'Similar content already exists',
+          existingDocument: {
+            id: duplicate.id,
+            title: duplicate.title || 'Untitled'
+          }
+        });
+      }
+
+      // Generate document ID
+      const { v4: uuidv4 } = require('uuid');
+      const docId = uuidv4();
+
+      // Prepare metadata with processing info
+      const metadata = {
+        title: finalTitle,
+        sourceUrl: sourceUrl || '',
+        tags: req.body.domain ? [req.body.domain] : [],
+        processingInfo: processingInfo
+      };
+
+      // Save cleaned document as markdown
+      await fileManager.saveMarkdownFile(projectId, docId, cleanedContent, metadata);
+
+      // Auto-generate study plan if requested
+      let studyPlanId = null;
+      if ((autoGenerateStudyPlan || processingInfo.cleaned) && documentProcessor) {
+        console.log('[HTTP Bridge] Auto-generating study plan...');
+        try {
+          const planResult = await documentProcessor.generateStudyPlan(finalTitle, cleanedContent, 7);
+
+          // Save the study plan
+          const planFilePath = path.join(fileManager.dataDir, 'projects', projectId, 'study-plans', `${docId}.md`);
+          await fileManager.saveStudyPlan(projectId, docId, planResult.plan, {
+            title: planResult.title,
+            duration: planResult.duration,
+            associatedDocumentId: docId,
+            generatedAt: new Date().toISOString()
+          });
+
+          studyPlanId = docId;
+          console.log('[HTTP Bridge] Study plan generated successfully');
+        } catch (error) {
+          console.warn('[HTTP Bridge] Failed to auto-generate study plan:', error.message);
+          // Continue anyway
+        }
+      }
+
+      res.json({
+        success: true,
+        documentId: docId,
+        studyPlanId: studyPlanId,
+        title: finalTitle,
+        processingInfo: processingInfo,
+        message: 'Document saved and processed successfully'
+      });
+    } catch (error) {
+      console.error('[HTTP Bridge] Error saving document:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Start server
+  httpServer = expressApp.listen(HTTP_BRIDGE_PORT, 'localhost', () => {
+    console.log(`[HTTP Bridge] Server running on http://localhost:${HTTP_BRIDGE_PORT}`);
+  });
+
+  httpServer.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.warn(`[HTTP Bridge] Port ${HTTP_BRIDGE_PORT} is in use, skipping HTTP bridge`);
+    } else {
+      console.error('[HTTP Bridge] Error:', error);
+    }
+  });
 }
 
 // Create main window
@@ -168,6 +363,23 @@ app.on('ready', () => {
   sessionManager = new SessionManager(fileManager, spacedRepetition, aiClient);
   analyticsEngine = new AnalyticsEngine(fileManager, spacedRepetition);
 
+  // Initialize Claude-based modules
+  if (process.env.CLAUDE_API_KEY && process.env.CLAUDE_API_KEY !== 'your_new_claude_api_key_here') {
+    try {
+      documentProcessor = new DocumentProcessor(process.env.CLAUDE_API_KEY, process.env.CLAUDE_MODEL);
+      contentCleaner = new ContentCleaner(process.env.CLAUDE_API_KEY);
+      console.log('[App] Claude modules initialized');
+    } catch (error) {
+      console.warn('[App] Claude modules failed to initialize:', error.message);
+      console.warn('[App] Document processing features will be disabled');
+    }
+  } else {
+    console.warn('[App] CLAUDE_API_KEY not configured - document processing disabled');
+  }
+
+  // Initialize HTTP bridge for Chrome extension
+  initHTTPBridge();
+
   createWindow();
   createMenu();
 
@@ -202,11 +414,18 @@ ipcMain.handle('project:list', async () => {
   }
 });
 
-ipcMain.handle('project:create', async (event, projectName) => {
+ipcMain.handle('project:create', async (event, projectName, projectDescription = '') => {
+  console.log('[DEBUG] IPC handler project:create called');
+  console.log('[DEBUG] projectName:', projectName);
+  console.log('[DEBUG] projectDescription:', projectDescription);
   try {
-    return await fileManager.createProject(projectName);
+    console.log('[DEBUG] Calling fileManager.createProject');
+    const result = await fileManager.createProject(projectName, projectDescription);
+    console.log('[DEBUG] fileManager.createProject returned:', result);
+    return result;
   } catch (error) {
-    console.error('Error creating project:', error);
+    console.error('[DEBUG] Error in project:create handler:', error);
+    console.error('[DEBUG] Error message:', error.message);
     throw error;
   }
 });
@@ -588,106 +807,6 @@ ipcMain.handle('dialog:select-directory', async () => {
   } catch (error) {
     console.error('Error selecting directory:', error);
     throw error;
-  }
-});
-
-// HTTP Bridge for Chrome Extension Communication
-const express = require('express');
-const cors = require('cors');
-const extensionApp = express();
-const BRIDGE_PORT = 47823;
-
-extensionApp.use(cors({ origin: 'chrome-extension://*' }));
-extensionApp.use(express.json({ limit: '50mb' }));
-
-// Health check endpoint
-extensionApp.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', app: 'Me Learning Hub' });
-});
-
-// Import document from extension endpoint
-extensionApp.post('/api/import-document', async (req, res) => {
-  try {
-    const { projectId, docId, content, metadata, autoGeneratePlan } = req.body;
-
-    if (!projectId || !docId || !content) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: projectId, docId, content'
-      });
-    }
-
-    // Check for duplicates by URL
-    if (metadata?.sourceUrl) {
-      const docs = await fileManager.listDocuments(projectId);
-      const duplicate = docs.find(d => d.sourceUrl === metadata.sourceUrl);
-
-      if (duplicate) {
-        return res.json({
-          success: false,
-          duplicate: true,
-          existingDoc: {
-            id: duplicate.id,
-            title: duplicate.title,
-            sourceUrl: duplicate.sourceUrl
-          }
-        });
-      }
-    }
-
-    // Save document
-    const result = await fileManager.saveMarkdownFile(
-      projectId, docId, content, metadata
-    );
-
-    // Optional: Auto-generate study plan
-    if (autoGeneratePlan && studyPlanGenerator) {
-      try {
-        const plan = await studyPlanGenerator.generatePlan(
-          projectId, docId, {
-            documentContent: content,
-            documentTitle: metadata?.title || 'Untitled',
-            techniques: ['Spaced Repetition'],
-            intensity: 'medium',
-            sessionDuration: 25
-          }
-        );
-        result.studyPlan = {
-          id: plan.id,
-          title: plan.title,
-          itemCount: plan.itemCount
-        };
-      } catch (planError) {
-        console.warn('Study plan generation failed:', planError);
-        // Continue even if plan generation fails
-      }
-    }
-
-    res.json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    console.error('Import document error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to import document'
-    });
-  }
-});
-
-// Start HTTP bridge server
-extensionApp.listen(BRIDGE_PORT, 'localhost', () => {
-  console.log(`[Extension Bridge] HTTP server listening on http://localhost:${BRIDGE_PORT}`);
-  console.log(`[Extension Bridge] Ready to accept chrome extension connections`);
-});
-
-// Handle bridge server errors
-extensionApp.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.warn(`[Extension Bridge] Port ${BRIDGE_PORT} already in use, bridge may not work`);
-  } else {
-    console.error('[Extension Bridge] Server error:', error);
   }
 });
 

@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   // Project Management
   listProjects: () => ipcRenderer.invoke('project:list'),
-  createProject: (projectName) => ipcRenderer.invoke('project:create', projectName),
+  createProject: (projectName, projectDescription) => ipcRenderer.invoke('project:create', projectName, projectDescription),
   getProject: (projectId) => ipcRenderer.invoke('project:get', projectId),
   deleteProject: (projectId) => ipcRenderer.invoke('project:delete', projectId),
   renameProject: (projectId, newName) => ipcRenderer.invoke('project:rename', projectId, newName),

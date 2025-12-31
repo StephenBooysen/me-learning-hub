@@ -1,258 +1,223 @@
 /**
  * Background Service Worker
- * Handles extension lifecycle and message routing
+ * Handles communication between extension and Electron app
  */
 
-// Initialize extension
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    console.log('Me Learning Hub extension installed');
-    // Open welcome page or settings
-    chrome.tabs.create({
-      url: 'popup.html'
-    });
-  } else if (details.reason === 'update') {
-    console.log('Me Learning Hub extension updated');
-  }
-});
+console.log('[Me Learning Hub] Background service worker loaded');
 
-// Handle command shortcuts
-chrome.commands.onCommand.addListener((command) => {
-  console.log('Command received:', command);
-
-  if (command === 'capture-page') {
-    captureCurrentPage();
-  } else if (command === 'capture-selection') {
-    captureSelection();
-  }
-});
+const ELECTRON_BRIDGE_URL = 'http://localhost:47823';
+const HEALTH_CHECK_TIMEOUT = 5000;
 
 /**
- * Capture entire current page
+ * Check if Electron bridge is running
  */
-async function captureCurrentPage() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    // Send message to content script to extract content
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'extractPageContent',
-      type: 'full'
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error:', chrome.runtime.lastError);
-        return;
-      }
-      handleExtractedContent(response, tab);
-    });
-  } catch (error) {
-    console.error('Error capturing page:', error);
-  }
-}
-
-/**
- * Capture selected text
- */
-async function captureSelection() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'extractSelectedContent'
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error:', chrome.runtime.lastError);
-        return;
-      }
-      handleExtractedContent(response, tab);
-    });
-  } catch (error) {
-    console.error('Error capturing selection:', error);
-  }
-}
-
-/**
- * Handle extracted content from content script
- */
-function handleExtractedContent(content, tab) {
-  if (!content || !content.markdown) {
-    console.warn('No content extracted');
-    return;
-  }
-
-  // Store in chrome.storage for popup to access
-  chrome.storage.local.set({
-    'lastExtraction': {
-      title: content.title || tab.title,
-      sourceUrl: tab.url,
-      markdown: content.markdown,
-      html: content.html,
-      timestamp: new Date().toISOString(),
-      tabId: tab.id
+async function checkElectronBridge() {
+    try {
+        const response = await fetch(`${ELECTRON_BRIDGE_URL}/api/health`, {
+            method: 'GET',
+            timeout: HEALTH_CHECK_TIMEOUT
+        });
+        return response.ok;
+    } catch (error) {
+        console.error('Electron bridge health check failed:', error);
+        return false;
     }
-  }, () => {
-    console.log('Content stored, opening popup');
-    // Open popup for user to confirm and save
-    chrome.action.openPopup();
-  });
 }
 
-// Handle messages from popup
+/**
+ * Fetch projects from Electron app
+ */
+async function fetchProjects() {
+    try {
+        const bridgeAvailable = await checkElectronBridge();
+        if (!bridgeAvailable) {
+            throw new Error('Electron app is not running or HTTP bridge is unavailable');
+        }
+
+        const response = await fetch(`${ELECTRON_BRIDGE_URL}/api/projects`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch projects: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.projects || [];
+    } catch (error) {
+        console.error('Error fetching projects:', error);
+        throw error;
+    }
+}
+
+/**
+ * Save document to Electron app
+ */
+async function saveDocument(projectId, content, metadata, autoGenerateStudyPlan = false) {
+    try {
+        const bridgeAvailable = await checkElectronBridge();
+        if (!bridgeAvailable) {
+            throw new Error('Electron app is not running');
+        }
+
+        const payload = {
+            projectId: projectId,
+            content: content,
+            title: metadata.title || 'Untitled Document',
+            sourceUrl: metadata.url,
+            domain: metadata.domain,
+            wordCount: metadata.wordCount,
+            readingTime: metadata.readingTime,
+            captureType: metadata.captureType,
+            autoGenerateStudyPlan: autoGenerateStudyPlan,
+            metadata: metadata
+        };
+
+        const response = await fetch(`${ELECTRON_BRIDGE_URL}/api/documents`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            // Check for duplicate error
+            if (response.status === 409) {
+                return {
+                    success: false,
+                    isDuplicate: true,
+                    message: data.message || 'Similar content already exists in this project',
+                    existingDocument: data.existingDocument
+                };
+            }
+            throw new Error(data.message || `Failed to save document: ${response.statusText}`);
+        }
+
+        return {
+            success: true,
+            documentId: data.documentId,
+            message: data.message || 'Document saved successfully'
+        };
+    } catch (error) {
+        console.error('Error saving document:', error);
+        throw error;
+    }
+}
+
+/**
+ * Override and save duplicate document
+ */
+async function overrideDuplicateDocument(projectId, content, metadata, autoGenerateStudyPlan = false) {
+    try {
+        const payload = {
+            projectId: projectId,
+            content: content,
+            title: metadata.title || 'Untitled Document',
+            sourceUrl: metadata.url,
+            domain: metadata.domain,
+            wordCount: metadata.wordCount,
+            readingTime: metadata.readingTime,
+            captureType: metadata.captureType,
+            autoGenerateStudyPlan: autoGenerateStudyPlan,
+            metadata: metadata,
+            override: true
+        };
+
+        const response = await fetch(`${ELECTRON_BRIDGE_URL}/api/documents`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || `Failed to save document: ${response.statusText}`);
+        }
+
+        return {
+            success: true,
+            documentId: data.documentId,
+            message: 'Document saved successfully'
+        };
+    } catch (error) {
+        console.error('Error overriding duplicate:', error);
+        throw error;
+    }
+}
+
+/**
+ * Listen for messages from popup
+ */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Message received:', request.action);
+    console.log('[Me Learning Hub] Message received from popup:', request.action);
 
-  if (request.action === 'getLastExtraction') {
-    chrome.storage.local.get('lastExtraction', (result) => {
-      sendResponse({ success: true, data: result.lastExtraction });
-    });
-    return true; // Will respond asynchronously
-  }
+    try {
+        if (request.action === 'fetchProjects') {
+            fetchProjects()
+                .then(projects => {
+                    console.log('[Me Learning Hub] Projects fetched:', projects.length);
+                    sendResponse({ success: true, projects: projects });
+                })
+                .catch(error => {
+                    console.error('[Me Learning Hub] Error fetching projects:', error);
+                    sendResponse({ success: false, error: error.message });
+                });
+            return true; // Keep channel open for async response
+        }
 
-  if (request.action === 'clearLastExtraction') {
-    chrome.storage.local.remove('lastExtraction', () => {
-      sendResponse({ success: true });
-    });
-    return true;
-  }
+        if (request.action === 'checkBridgeConnection') {
+            checkElectronBridge()
+                .then(isAvailable => {
+                    console.log('[Me Learning Hub] Bridge connection check:', isAvailable);
+                    sendResponse({ success: true, connected: isAvailable });
+                })
+                .catch(error => {
+                    console.error('[Me Learning Hub] Bridge connection error:', error);
+                    sendResponse({ success: false, error: error.message });
+                });
+            return true;
+        }
 
-  if (request.action === 'listProjects') {
-    // This would be called from popup to get projects from Electron
-    sendElectronMessage({
-      action: 'project:list'
-    }).then(result => {
-      sendResponse({ success: true, data: result });
-    }).catch(error => {
-      sendResponse({ success: false, error: error.message });
-    });
-    return true;
-  }
+        if (request.action === 'saveDocument') {
+            console.log('[Me Learning Hub] Saving document...');
+            const { projectId, content, metadata, autoGenerateStudyPlan } = request;
+            saveDocument(projectId, content, metadata, autoGenerateStudyPlan)
+                .then(result => {
+                    console.log('[Me Learning Hub] Document saved successfully:', result);
+                    sendResponse(result);
+                })
+                .catch(error => {
+                    console.error('[Me Learning Hub] Error saving document:', error);
+                    sendResponse({ success: false, error: error.message });
+                });
+            return true;
+        }
 
-  if (request.action === 'saveDocument') {
-    // Save document to Electron app
-    sendElectronMessage({
-      action: 'document:save',
-      projectId: request.projectId,
-      docId: request.docId,
-      content: request.content,
-      metadata: request.metadata
-    }).then(result => {
-      sendResponse({ success: true, data: result });
-    }).catch(error => {
-      sendResponse({ success: false, error: error.message });
-    });
-    return true;
-  }
-});
-
-/**
- * Send message to Electron app via HTTP bridge
- * Uses localhost:47823 HTTP bridge for document import and project management
- */
-async function sendElectronMessage(message) {
-  const BRIDGE_URL = 'http://localhost:47823';
-  const TIMEOUT = 5000;
-
-  try {
-    // First check if Electron app is running
-    const healthCheck = await Promise.race([
-      fetch(`${BRIDGE_URL}/api/health`),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Health check timeout')), TIMEOUT)
-      )
-    ]);
-
-    if (!healthCheck.ok) {
-      throw new Error('Electron app health check failed');
+        if (request.action === 'overrideDuplicate') {
+            console.log('[Me Learning Hub] Overriding duplicate...');
+            const { projectId, content, metadata, autoGenerateStudyPlan } = request;
+            overrideDuplicateDocument(projectId, content, metadata, autoGenerateStudyPlan)
+                .then(result => {
+                    console.log('[Me Learning Hub] Duplicate override successful:', result);
+                    sendResponse(result);
+                })
+                .catch(error => {
+                    console.error('[Me Learning Hub] Error overriding duplicate:', error);
+                    sendResponse({ success: false, error: error.message });
+                });
+            return true;
+        }
+    } catch (error) {
+        console.error('[Me Learning Hub] Unexpected error in message handler:', error);
+        sendResponse({ success: false, error: error.message });
     }
-
-    // Map native messaging format to HTTP API format
-    let endpoint, payload;
-
-    if (message.action === 'document:save') {
-      endpoint = '/api/import-document';
-      payload = {
-        projectId: message.projectId,
-        docId: message.docId,
-        content: message.content,
-        metadata: message.metadata || {},
-        autoGeneratePlan: message.autoGeneratePlan || false
-      };
-    } else if (message.action === 'project:list') {
-      endpoint = '/api/projects';
-      payload = {};
-    } else {
-      throw new Error(`Unknown action: ${message.action}`);
-    }
-
-    // Send HTTP request to Electron bridge
-    const response = await Promise.race([
-      fetch(`${BRIDGE_URL}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), TIMEOUT)
-      )
-    ]);
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.duplicate) {
-      // Handle duplicate document case
-      return {
-        success: false,
-        duplicate: true,
-        existingDoc: data.existingDoc,
-        message: 'Document already imported from this URL'
-      };
-    }
-
-    return { success: true, data: data.data || data };
-  } catch (error) {
-    console.error('Electron communication error:', error.message);
-    throw new Error(`Failed to communicate with Me Learning Hub app: ${error.message}`);
-  }
-}
-
-/**
- * Handle tab updates
- */
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete') {
-    console.log('Tab loaded:', tab.url);
-    // Could inject content script dynamically if needed
-  }
 });
-
-/**
- * Handle context menu clicks
- */
-chrome.contextMenus?.create?.({
-  id: 'capture-page-context',
-  title: 'Capture page to Me Learning Hub',
-  contexts: ['page']
-});
-
-chrome.contextMenus?.create?.({
-  id: 'capture-selection-context',
-  title: 'Capture selection to Me Learning Hub',
-  contexts: ['selection']
-});
-
-chrome.contextMenus?.onClicked?.addListener?.((info, tab) => {
-  if (info.menuItemId === 'capture-page-context') {
-    captureCurrentPage();
-  } else if (info.menuItemId === 'capture-selection-context') {
-    captureSelection();
-  }
-});
-
-console.log('Me Learning Hub background service worker loaded');

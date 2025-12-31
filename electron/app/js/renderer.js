@@ -29,8 +29,10 @@ const themeSelect = document.getElementById('theme-select');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   initializeEventListeners();
-  loadProjects();
   loadConfig();
+  // Show dashboard first, then load projects
+  switchView('dashboard');
+  loadProjects();
 });
 
 /**
@@ -48,6 +50,7 @@ function initializeEventListeners() {
   // New Project buttons
   newProjectBtns.forEach(btn => {
     btn.addEventListener('click', () => {
+      console.log('[DEBUG] New project button clicked');
       openModal('modal-new-project');
     });
   });
@@ -117,6 +120,35 @@ function initializeEventListeners() {
       window.electronAPI.setConfig('theme', e.target.value);
     });
   }
+
+  // Document viewer controls
+  const breadcrumbBack = document.getElementById('breadcrumb-docs');
+  const copyBtn = document.getElementById('btn-copy-content');
+  const downloadBtn = document.getElementById('btn-download-content');
+
+  if (breadcrumbBack) {
+    breadcrumbBack.addEventListener('click', (e) => {
+      e.preventDefault();
+      goBackToDocumentsList();
+    });
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', copyContentToClipboard);
+  }
+
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', downloadDocumentAsMarkdown);
+  }
+
+  // Study plan viewer controls
+  const studyBreadcrumbBack = document.getElementById('breadcrumb-study');
+  if (studyBreadcrumbBack) {
+    studyBreadcrumbBack.addEventListener('click', (e) => {
+      e.preventDefault();
+      backToStudyPlansList();
+    });
+  }
 }
 
 /**
@@ -142,7 +174,7 @@ function switchView(viewName) {
   });
 
   // Update page title
-  const pageTitle = document.querySelector('.page-title');
+  const pageTitle = document.getElementById('page-title');
   const titles = {
     dashboard: 'Dashboard',
     projects: 'My Projects',
@@ -157,6 +189,8 @@ function switchView(viewName) {
     loadDashboard();
   } else if (viewName === 'projects') {
     loadProjectsList();
+  } else if (viewName === 'documents') {
+    loadDocuments();
   } else if (viewName === 'progress') {
     loadProgressView();
   }
@@ -222,17 +256,65 @@ function createProjectCard(project) {
   const card = document.createElement('div');
   card.className = 'project-card';
   card.innerHTML = `
-    <div class="card-title">${escapeHtml(project.name)}</div>
+    <div class="card-header">
+      <div class="card-title">${escapeHtml(project.name)}</div>
+      <button class="btn-delete" title="Delete project">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 17 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="7" y1="14" x2="13" y2="14"></line>
+        </svg>
+      </button>
+    </div>
     <div class="card-description">${escapeHtml(project.description || 'No description')}</div>
     <div class="card-meta">
       <span>${project.documents} documents</span>
       <span>${formatDateShort(project.created)}</span>
     </div>
   `;
-  card.addEventListener('click', () => {
+
+  // Click on card to open documents view
+  card.addEventListener('click', (e) => {
+    // Don't navigate if delete button was clicked
+    if (e.target.closest('.btn-delete')) {
+      return;
+    }
     currentProject = project;
     switchView('documents');
+    loadDocuments();
   });
+
+  // Delete button handler
+  const deleteBtn = card.querySelector('.btn-delete');
+  deleteBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+
+    // Confirmation dialog
+    if (confirm(`Are you sure you want to delete "${project.name}" and all of its contents? This cannot be undone.`)) {
+      try {
+        console.log('[DEBUG] Deleting project:', project.id);
+        await window.electronAPI.deleteProject(project.id);
+        console.log('[DEBUG] Project deleted successfully');
+
+        // Reload projects list
+        await loadProjects();
+
+        // Show success message
+        showSuccessMessage(`Project "${project.name}" deleted successfully`);
+
+        // If deleted project was current, switch away
+        if (currentProject && currentProject.id === project.id) {
+          currentProject = null;
+          switchView('dashboard');
+        }
+      } catch (error) {
+        console.error('[DEBUG] Error deleting project:', error);
+        showErrorMessage(`Failed to delete project: ${error.message}`);
+      }
+    }
+  });
+
   return card;
 }
 
@@ -245,7 +327,11 @@ async function loadProjectsList() {
     displayProjects();
   } catch (error) {
     console.error('Error loading projects:', error);
-    showErrorMessage('Failed to load projects');
+    const container = document.getElementById('projects-list');
+    if (container) {
+      container.innerHTML = `<p class="empty-state">Error loading projects: ${error.message}</p>`;
+    }
+    showErrorMessage('Failed to load projects: ' + error.message);
   }
 }
 
@@ -254,10 +340,15 @@ async function loadProjectsList() {
  */
 function displayProjects() {
   const container = document.getElementById('projects-list');
+  if (!container) {
+    console.error('projects-list container not found');
+    return;
+  }
+
   container.innerHTML = '';
 
   if (projects.length === 0) {
-    container.innerHTML = '<p class="empty-state">No projects yet.</p>';
+    container.innerHTML = '<p class="empty-state">No projects yet. Click "+ New Project" to create one.</p>';
     return;
   }
 
@@ -279,20 +370,261 @@ async function loadProjects() {
 }
 
 /**
+ * Load documents for current project
+ */
+async function loadDocuments() {
+  if (!currentProject) {
+    const container = document.getElementById('documents-list');
+    if (container) {
+      container.innerHTML = '<p class="empty-state">Please select a project first.</p>';
+    }
+    return;
+  }
+
+  try {
+    const documents = await window.electronAPI.listDocuments(currentProject.id);
+    displayDocuments(documents);
+  } catch (error) {
+    console.error('Error loading documents:', error);
+    const container = document.getElementById('documents-list');
+    if (container) {
+      container.innerHTML = `<p class="empty-state">Error loading documents: ${error.message}</p>`;
+    }
+  }
+}
+
+/**
+ * Display documents
+ */
+function displayDocuments(documents) {
+  const container = document.getElementById('documents-list');
+  if (!container) {
+    console.error('documents-list container not found');
+    return;
+  }
+
+  container.innerHTML = '';
+
+  // Update header with project info
+  const projectHeader = document.querySelector('.view-header h3');
+  if (projectHeader) {
+    projectHeader.textContent = `${currentProject.name} - Documents`;
+  }
+
+  if (!documents || documents.length === 0) {
+    container.innerHTML = '<p class="empty-state">No documents in this project yet. Import documents to get started.</p>';
+    return;
+  }
+
+  documents.forEach(doc => {
+    const card = createDocumentCard(doc);
+    container.appendChild(card);
+  });
+}
+
+/**
+ * Create document card
+ */
+function createDocumentCard(doc) {
+  const card = document.createElement('div');
+  card.className = 'document-card';
+  card.style.cursor = 'pointer';
+  card.innerHTML = `
+    <div class="card-title">${escapeHtml(doc.title || doc.id)}</div>
+    <div class="card-description">${escapeHtml(doc.description || 'No description')}</div>
+    <div class="card-meta">
+      <span>${doc.wordCount || 0} words</span>
+      <span>${formatDateShort(doc.created || new Date().toISOString())}</span>
+    </div>
+  `;
+  card.addEventListener('click', async () => {
+    console.log('Document clicked:', doc);
+    try {
+      // Read the document content
+      const docContent = await window.electronAPI.readDocument(currentProject.id, doc.id);
+
+      // Display markdown inline
+      displayMarkdownInline(doc, docContent);
+    } catch (error) {
+      console.error('Error opening document:', error);
+      showErrorMessage('Failed to open document: ' + error.message);
+    }
+  });
+
+  // Add hover effect
+  card.addEventListener('mouseenter', () => {
+    card.style.transform = 'translateY(-2px)';
+    card.style.boxShadow = '0 8px 16px rgba(0,0,0,0.1)';
+  });
+
+  card.addEventListener('mouseleave', () => {
+    card.style.transform = 'translateY(0)';
+    card.style.boxShadow = '';
+  });
+
+  return card;
+}
+
+/**
+ * Display markdown content inline
+ */
+async function displayMarkdownInline(doc, docContent) {
+  try {
+    // Hide documents list, show markdown viewer
+    const listContainer = document.getElementById('documents-list-container');
+    const viewerContainer = document.getElementById('markdown-viewer-container');
+    const breadcrumb = document.getElementById('docs-breadcrumb');
+
+    listContainer.style.display = 'none';
+    viewerContainer.style.display = 'block';
+    breadcrumb.style.display = 'block';
+
+    // Update breadcrumb title
+    document.getElementById('breadcrumb-doc-title').textContent = doc.title || 'Document';
+
+    // Update document title
+    document.getElementById('doc-title-display').textContent = doc.title || 'Untitled Document';
+
+    // Calculate and display metadata
+    const wordCount = docContent.content ? docContent.content.split(/\s+/).length : 0;
+    const readTime = Math.max(1, Math.ceil(wordCount / 200));
+
+    document.getElementById('doc-wordcount').querySelector('span').textContent = wordCount.toLocaleString();
+    document.getElementById('doc-readtime').querySelector('span').textContent = readTime;
+
+    // Display quality score if available
+    if (docContent.metadata && docContent.metadata.processingInfo && docContent.metadata.processingInfo.qualityScore) {
+      const qualitySpan = document.getElementById('doc-quality');
+      qualitySpan.querySelector('span').textContent = docContent.metadata.processingInfo.qualityScore;
+      qualitySpan.style.display = 'inline-flex';
+    }
+
+    // Display topics if available
+    if (docContent.metadata && docContent.metadata.processingInfo && docContent.metadata.processingInfo.topics) {
+      const topicsSpan = document.getElementById('doc-topics');
+      const topics = docContent.metadata.processingInfo.topics;
+      topicsSpan.querySelector('span').textContent = topics.slice(0, 3).join(', ');
+      topicsSpan.style.display = 'inline-flex';
+    }
+
+    // Render markdown content
+    const markdownContainer = document.getElementById('markdown-content');
+    const content = docContent.content || '';
+
+    // Use marked library if available, otherwise show plain text
+    if (typeof marked !== 'undefined') {
+      markdownContainer.innerHTML = marked.parse(content);
+    } else {
+      markdownContainer.innerHTML = `<pre>${escapeHtml(content)}</pre>`;
+    }
+
+    // Store current document content for copy/download functionality
+    window.currentDocumentContent = content;
+    window.currentDocumentTitle = doc.title || 'document';
+
+    // Add scroll to top
+    const contentArea = document.querySelector('.content');
+    if (contentArea) {
+      contentArea.scrollTop = 0;
+    }
+
+    // Highlight code blocks
+    highlightCodeBlocks();
+  } catch (error) {
+    console.error('Error displaying markdown:', error);
+    showErrorMessage('Failed to display document: ' + error.message);
+  }
+}
+
+/**
+ * Go back to documents list
+ */
+function goBackToDocumentsList() {
+  const listContainer = document.getElementById('documents-list-container');
+  const viewerContainer = document.getElementById('markdown-viewer-container');
+  const breadcrumb = document.getElementById('docs-breadcrumb');
+
+  viewerContainer.style.display = 'none';
+  listContainer.style.display = 'block';
+  breadcrumb.style.display = 'none';
+
+  window.currentDocumentContent = null;
+  window.currentDocumentTitle = null;
+
+  const contentArea = document.querySelector('.content');
+  if (contentArea) {
+    contentArea.scrollTop = 0;
+  }
+}
+
+/**
+ * Highlight code blocks
+ */
+function highlightCodeBlocks() {
+  const codeBlocks = document.querySelectorAll('pre code');
+  codeBlocks.forEach(block => {
+    // Add language class if not present
+    if (!block.className) {
+      block.className = 'language-javascript';
+    }
+  });
+}
+
+/**
+ * Copy all content to clipboard
+ */
+function copyContentToClipboard() {
+  if (window.currentDocumentContent) {
+    navigator.clipboard.writeText(window.currentDocumentContent).then(() => {
+      const btn = document.getElementById('btn-copy-content');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+      }, 2000);
+    }).catch(err => {
+      showErrorMessage('Failed to copy content: ' + err.message);
+    });
+  }
+}
+
+/**
+ * Download document as markdown file
+ */
+function downloadDocumentAsMarkdown() {
+  if (window.currentDocumentContent && window.currentDocumentTitle) {
+    const element = document.createElement('a');
+    const file = new Blob([window.currentDocumentContent], { type: 'text/markdown' });
+    element.href = URL.createObjectURL(file);
+    element.download = window.currentDocumentTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase() + '.md';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  }
+}
+
+/**
  * Create a new project
  */
 async function createNewProject() {
+  console.log('[DEBUG] createNewProject function called');
   const projectName = projectNameInput.value.trim();
   const projectDescription = projectDescriptionInput.value.trim();
 
+  console.log('[DEBUG] Project name:', projectName);
+  console.log('[DEBUG] Project description:', projectDescription);
+
   if (!projectName) {
+    console.log('[DEBUG] ERROR: Project name is empty');
     showErrorMessage('Please enter a project name');
     return;
   }
 
   try {
+    console.log('[DEBUG] Calling window.electronAPI.createProject');
     btnCreateProject.disabled = true;
     const newProject = await window.electronAPI.createProject(projectName, projectDescription);
+    console.log('[DEBUG] Project created successfully:', newProject);
 
     // Reset form
     formNewProject.reset();
@@ -311,7 +643,9 @@ async function createNewProject() {
       loadProjectsList();
     }
   } catch (error) {
-    console.error('Error creating project:', error);
+    console.error('[DEBUG] ERROR creating project:', error);
+    console.error('[DEBUG] Error message:', error.message);
+    console.error('[DEBUG] Error stack:', error.stack);
     showErrorMessage(`Failed to create project: ${error.message}`);
   } finally {
     btnCreateProject.disabled = false;
@@ -339,9 +673,15 @@ async function loadConfig() {
  * Open modal
  */
 function openModal(modalId) {
+  console.log(`[DEBUG] openModal called with modalId: ${modalId}`);
   const modal = document.getElementById(modalId);
+  console.log(`[DEBUG] Modal element found:`, modal ? 'YES' : 'NO');
   if (modal) {
-    modal.style.display = 'flex';
+    console.log(`[DEBUG] Adding show class to modal`);
+    modal.classList.add('show');
+    console.log(`[DEBUG] Modal classes after update:`, modal.className);
+  } else {
+    console.log(`[DEBUG] ERROR: Modal with id "${modalId}" not found in DOM`);
   }
 }
 
@@ -349,9 +689,11 @@ function openModal(modalId) {
  * Close modal
  */
 function closeModal(modalId) {
+  console.log(`[DEBUG] closeModal called with modalId: ${modalId}`);
   const modal = document.getElementById(modalId);
   if (modal) {
-    modal.style.display = 'none';
+    console.log(`[DEBUG] Removing show class from modal`);
+    modal.classList.remove('show');
   }
 }
 
@@ -922,28 +1264,71 @@ function resetItemStates() {
  */
 async function loadStudyPlansWithSessions() {
   try {
-    if (!currentProject) {
-      document.getElementById('study-plans-list').innerHTML =
-        '<p class="empty-state">Select a project first.</p>';
-      return;
-    }
-
-    const plans = await window.electronAPI.listStudyPlans(currentProject.id);
     const container = document.getElementById('study-plans-list');
     container.innerHTML = '';
 
-    if (plans.length === 0) {
-      container.innerHTML = '<p class="empty-state">No study plans yet.</p>';
+    if (!projects || projects.length === 0) {
+      container.innerHTML =
+        '<p class="empty-state">No projects yet. Create a project to generate study plans.</p>';
       return;
     }
 
-    plans.forEach(plan => {
-      const card = createStudyPlanCard(plan);
-      container.appendChild(card);
+    let totalPlans = 0;
+    const projectsWithPlans = [];
+
+    // Load study plans for each project
+    for (const project of projects) {
+      try {
+        const plans = await window.electronAPI.listStudyPlans(project.id);
+        if (plans && plans.length > 0) {
+          projectsWithPlans.push({ project, plans });
+          totalPlans += plans.length;
+        }
+      } catch (error) {
+        console.warn(`Error loading plans for project ${project.id}:`, error);
+      }
+    }
+
+    if (totalPlans === 0) {
+      container.innerHTML =
+        '<p class="empty-state">No study plans yet. Create documents to generate study plans.</p>';
+      return;
+    }
+
+    // Display grouped study plans
+    projectsWithPlans.forEach(({ project, plans }) => {
+      // Create project section
+      const projectSection = document.createElement('div');
+      projectSection.className = 'study-plans-section';
+
+      // Project heading
+      const heading = document.createElement('div');
+      heading.className = 'study-plans-project-heading';
+      heading.innerHTML = `
+        <div class="heading-content">
+          <i class="bi bi-folder-fill"></i>
+          <h4>${escapeHtml(project.name)}</h4>
+          <span class="badge badge-secondary">${plans.length} ${plans.length === 1 ? 'plan' : 'plans'}</span>
+        </div>
+      `;
+      projectSection.appendChild(heading);
+
+      // Plans grid for this project
+      const plansGrid = document.createElement('div');
+      plansGrid.className = 'study-plans-grid';
+
+      plans.forEach(plan => {
+        const card = createStudyPlanCard(plan);
+        plansGrid.appendChild(card);
+      });
+
+      projectSection.appendChild(plansGrid);
+      container.appendChild(projectSection);
     });
 
   } catch (error) {
     console.error('Error loading study plans:', error);
+    showErrorMessage('Failed to load study plans');
   }
 }
 
@@ -953,30 +1338,148 @@ async function loadStudyPlansWithSessions() {
 function createStudyPlanCard(plan) {
   const card = document.createElement('div');
   card.className = 'study-plan-card';
+
+  // Calculate completion percentage
+  const total = plan.totalItems || 0;
+  const completed = plan.completed || 0;
+  const completionPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  // Format techniques
+  const techniques = (plan.techniques || [])
+    .filter(t => t && t.trim())
+    .join(', ') || 'No techniques specified';
+
   card.innerHTML = `
-    <div class="card-title">${escapeHtml(plan.title)}</div>
+    <div class="card-title">
+      <i class="bi bi-book-half" style="margin-right: 0.5rem; color: #0d6efd;"></i>
+      ${escapeHtml(plan.title)}
+    </div>
     <div class="card-description">
-      ${(plan.techniques || []).join(', ')}
+      ${escapeHtml(techniques)}
     </div>
     <div class="card-meta">
-      <span>${plan.totalItems || 0} items</span>
-      <span>${plan.completed || 0}/${plan.totalItems || 0} completed</span>
+      <span><i class="bi bi-list-check"></i> ${total} items</span>
+      <span><i class="bi bi-check-circle"></i> ${completed}/${total} done</span>
     </div>
-    <div class="card-actions" style="margin-top: 12px;">
-      <button class="btn btn--primary btn-start-session" data-plan-id="${plan.id}">
-        Start Session
+    <div class="study-plan-progress">
+      <div class="progress-bar-small">
+        <div class="progress-fill" style="width: ${completionPercent}%"></div>
+      </div>
+      <span style="min-width: 35px; color: #6c757d;">${completionPercent}%</span>
+    </div>
+    <div class="card-actions">
+      <button class="btn-start-session" data-plan-id="${plan.id}">
+        <i class="bi bi-play-circle"></i> Start Session
+      </button>
+      <button class="btn-view-details" data-plan-id="${plan.id}" title="View details">
+        <i class="bi bi-eye"></i>
       </button>
     </div>
   `;
 
-  // Add event listener
+  // Add event listeners
   const startBtn = card.querySelector('.btn-start-session');
+  const viewBtn = card.querySelector('.btn-view-details');
+
   startBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     startStudySession(currentProject.id, plan.id);
   });
 
+  viewBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    loadStudyPlanDetails(plan);
+  });
+
   return card;
+}
+
+/**
+ * Load study plan details inline with breadcrumb
+ */
+async function loadStudyPlanDetails(plan) {
+  try {
+    // Read the study plan markdown file
+    const planContent = await window.electronAPI.readStudyPlan(currentProject.id, plan.id);
+
+    // Calculate metrics
+    const total = plan.totalItems || 0;
+    const completed = plan.completed || 0;
+    const completionPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const qualityScore = planContent.metadata?.processingInfo?.qualityScore || 0;
+
+    // Update title
+    document.getElementById('plan-title-display').textContent = plan.title || 'Untitled Plan';
+    document.getElementById('breadcrumb-plan-title').textContent = plan.title || 'Untitled Plan';
+
+    // Update metrics display
+    document.getElementById('plan-total-display').innerHTML =
+      `<i class="bi bi-list-ul"></i> <span>${total}</span> items`;
+    document.getElementById('plan-completed-display').innerHTML =
+      `<i class="bi bi-check-circle"></i> <span>${completed}</span> completed`;
+    document.getElementById('plan-progress-display').innerHTML =
+      `<i class="bi bi-graph-up"></i> <span>${completionPercent}</span>% progress`;
+    document.getElementById('plan-quality-display').innerHTML =
+      `<i class="bi bi-star-fill" style="color: #ffc107;"></i> Quality: <span>${qualityScore}</span>/10`;
+
+    // Display techniques as badges
+    const techniquesContainer = document.getElementById('plan-detail-techniques');
+    techniquesContainer.innerHTML = '';
+    if (plan.techniques && plan.techniques.length > 0) {
+      plan.techniques.forEach(technique => {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-primary';
+        badge.style.fontSize = '0.9rem';
+        badge.style.padding = '0.5rem 0.75rem';
+
+        // Add icon based on technique
+        let icon = '🔄';
+        if (technique === 'Active Recall') icon = '❓';
+        else if (technique === 'Interleaving') icon = '🔀';
+        else if (technique === 'Feynman Technique') icon = '💭';
+
+        badge.innerHTML = `${icon} ${technique}`;
+        techniquesContainer.appendChild(badge);
+      });
+    }
+
+    // Display plan content
+    const overviewContainer = document.getElementById('plan-detail-overview');
+    const content = planContent.content || '';
+
+    // Use marked library if available, otherwise show plain text
+    if (typeof marked !== 'undefined' && content) {
+      overviewContainer.innerHTML = marked.parse(content);
+    } else if (content) {
+      overviewContainer.innerHTML = `<pre>${escapeHtml(content)}</pre>`;
+    } else {
+      overviewContainer.innerHTML = '<p class="text-muted">No plan overview available.</p>';
+    }
+
+    // Setup start session button
+    const startBtn = document.getElementById('btn-start-study-session');
+    startBtn.onclick = () => {
+      startStudySession(currentProject.id, plan.id);
+    };
+
+    // Show details view, hide list view
+    document.getElementById('study-plans-list-container').style.display = 'none';
+    document.getElementById('study-plan-details-container').style.display = 'block';
+    document.getElementById('study-breadcrumb').style.display = 'block';
+
+  } catch (error) {
+    console.error('Error loading study plan details:', error);
+    showErrorMessage('Failed to load study plan details: ' + error.message);
+  }
+}
+
+/**
+ * Go back to study plans list
+ */
+function backToStudyPlansList() {
+  document.getElementById('study-plans-list-container').style.display = 'block';
+  document.getElementById('study-plan-details-container').style.display = 'none';
+  document.getElementById('study-breadcrumb').style.display = 'none';
 }
 
 /**

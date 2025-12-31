@@ -26,8 +26,8 @@ class SessionManager {
   async startSession(projectId, planId, options = {}) {
     try {
       // Read the study plan
-      const planContent = await this.fileManager.readStudyPlan(projectId, planId);
-      const plan = this._parseStudyPlan(planContent);
+      const planData = await this.fileManager.readStudyPlan(projectId, planId);
+      const plan = this._parseStudyPlan(planData.content);
 
       // Generate session ID
       const sessionId = generateUUID();

@@ -141,6 +141,7 @@ vite.config.ts.timestamp-*
 # Me Learning Hub specific
 data/projects/
 .me-learning-hub/
+projects/
 electron/node_modules/
 electron/dist/
 electron/dist-electron/
