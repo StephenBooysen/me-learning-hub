@@ -16,7 +16,7 @@ const toggleSidebarBtn = document.getElementById('toggle-sidebar');
 // Modals
 const newProjectModal = document.getElementById('modal-new-project');
 const settingsModal = document.getElementById('modal-settings');
-const modalCloseButtons = document.querySelectorAll('.modal-close');
+const modalCloseButtons = document.querySelectorAll('.modal .btn-close');
 const formNewProject = document.getElementById('form-new-project');
 const btnCreateProject = document.getElementById('btn-create-project');
 
@@ -63,8 +63,10 @@ function initializeEventListeners() {
   // Modal close buttons
   modalCloseButtons.forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const modalId = btn.dataset.modal;
-      closeModal(modalId);
+      const modal = btn.closest('.modal');
+      if (modal) {
+        closeModal(modal.id);
+      }
     });
   });
 
@@ -77,11 +79,21 @@ function initializeEventListeners() {
     });
   });
 
-  // Modal action buttons
+  // Modal action buttons (data-modal attribute)
   document.querySelectorAll('[data-modal]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       if (btn.tagName === 'BUTTON' && btn.textContent.includes('Cancel')) {
         closeModal(btn.dataset.modal);
+      }
+    });
+  });
+
+  // Bootstrap-style dismiss buttons (data-bs-dismiss="modal")
+  document.querySelectorAll('[data-bs-dismiss="modal"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const modal = btn.closest('.modal');
+      if (modal) {
+        closeModal(modal.id);
       }
     });
   });
@@ -117,6 +129,7 @@ function initializeEventListeners() {
   // Settings changes
   if (themeSelect) {
     themeSelect.addEventListener('change', (e) => {
+      applyTheme(e.target.value);
       window.electronAPI.setConfig('theme', e.target.value);
     });
   }
@@ -664,6 +677,7 @@ async function loadConfig() {
     if (themeSelect) {
       themeSelect.value = config.theme || 'light';
     }
+    applyTheme(config.theme || 'light');
   } catch (error) {
     console.error('Error loading config:', error);
   }
@@ -695,6 +709,13 @@ function closeModal(modalId) {
     console.log(`[DEBUG] Removing show class from modal`);
     modal.classList.remove('show');
   }
+}
+
+/**
+ * Apply theme to the document
+ */
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
 }
 
 /**

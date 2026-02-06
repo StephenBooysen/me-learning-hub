@@ -18,7 +18,7 @@
 <body>
   <div class="d-flex h-100">
     <!-- Sidebar -->
-    <aside class="sidebar bg-white border-end">
+    <aside class="sidebar">
       <div class="p-4 border-bottom">
         <h1 class="h4 mb-0 text-primary fw-bold">
           <i class="bi bi-book"></i> Learning Hub
@@ -59,7 +59,7 @@
     <!-- Main Content Area -->
     <main class="main-content flex-grow-1 d-flex flex-column">
       <!-- Header -->
-      <header class="bg-white border-bottom p-4">
+      <header class="p-4">
         <div class="d-flex align-items-center justify-content-between">
           <div class="d-flex align-items-center gap-3">
             <button class="btn btn-link d-md-none" id="toggle-sidebar">
@@ -395,7 +395,7 @@
                   <div class="card-content mb-4" id="question-content"></div>
                   <textarea id="question-answer-input" class="form-control mb-3" rows="6" placeholder="Type your answer here..."></textarea>
                   <button class="btn btn-primary" id="show-answer-btn">Show Answer</button>
-                  <div id="correct-answer" style="display: none;" class="mt-4 p-3 bg-light rounded">
+                  <div id="correct-answer" style="display: none;" class="mt-4 p-3 rounded">
                     <div class="text-muted small mb-2">Correct Answer</div>
                     <div id="correct-answer-content"></div>
                   </div>
@@ -411,7 +411,7 @@
                   <div class="card-content mb-4" id="explanation-prompt"></div>
                   <textarea id="explanation-input" class="form-control mb-3" rows="8" placeholder="Explain the concept as if teaching a beginner..."></textarea>
                   <button class="btn btn-primary" id="evaluate-explanation-btn">Evaluate My Explanation</button>
-                  <div id="evaluation-result" style="display: none;" class="mt-4 p-3 bg-light rounded">
+                  <div id="evaluation-result" style="display: none;" class="mt-4 p-3 rounded">
                     <div class="mb-3">
                       <strong>Score: <span id="evaluation-score">0</span>/10</strong>
                     </div>
